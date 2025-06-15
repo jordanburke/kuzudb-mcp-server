@@ -43,8 +43,9 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
   Change the `{Absolute Path to the Kuzu database}` to the actual path
 - Restart Claude Desktop
 
-### With Node.js and npm (for Development)
-- Install dependencies: `npm install`
+### With Node.js and pnpm (for Development)
+- Install dependencies: `pnpm install`
+- Build the project: `pnpm run build`
 - Edit the configuration file `config.json`:
   - on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
   - on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -55,7 +56,7 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
         "kuzu": {
             "command": "node",
             "args": [
-                "{Absolute Path to this repository}/index.js",
+                "{Absolute Path to this repository}/dist/index.js",
                 "{Absolute Path to the Kuzu database}",
             ]
         }

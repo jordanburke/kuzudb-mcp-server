@@ -1,24 +1,53 @@
-const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
-const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
-const {
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
-} = require("@modelcontextprotocol/sdk/types.js");
-const kuzu = require("kuzu");
+  CallToolRequest,
+  GetPromptRequest,
+} from "@modelcontextprotocol/sdk/types.js";
+import * as kuzu from "kuzu";
+
+interface TableInfo {
+  name: string;
+  type: string;
+  isPrimaryKey: boolean;
+}
+
+interface NodeTable {
+  name: string;
+  comment: string;
+  properties: TableInfo[];
+}
+
+interface RelTable {
+  name: string;
+  comment: string;
+  properties: Omit<TableInfo, "isPrimaryKey">[];
+  connectivity: Array<{
+    src: string;
+    dst: string;
+  }>;
+}
+
+interface Schema {
+  nodeTables: NodeTable[];
+  relTables: RelTable[];
+}
 
 const TABLE_TYPES = {
   NODE: "NODE",
   REL: "REL",
-};
+} as const;
 
-const bigIntReplacer = (_, value) => {
+const bigIntReplacer = (_: string, value: unknown): unknown => {
   if (typeof value === "bigint") {
     return value.toString();
   }
   return value;
-}
+};
 
 const server = new Server(
   {
@@ -31,10 +60,10 @@ const server = new Server(
       tools: {},
       prompts: {},
     },
-  },
+  }
 );
 
-let dbPath;
+let dbPath: string;
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -46,7 +75,7 @@ if (args.length === 0) {
     process.exit(1);
   }
 } else {
-  dbPath = args[0];
+  dbPath = args[0]!;
 }
 
 const isReadOnly = process.env.KUZU_READ_ONLY === "true";
@@ -62,7 +91,7 @@ process.on("SIGTERM", () => {
 const db = new kuzu.Database(dbPath, 0, true, isReadOnly);
 const conn = new kuzu.Connection(db);
 
-const getPrompt = (question, schema) => {
+const getPrompt = (question: string, schema: Schema): string => {
   const prompt = `Task:Generate Kuzu Cypher statement to query a graph database.
 Instructions:
 Generate the Kuzu dialect of Cypher with the following rules in mind:
@@ -97,53 +126,60 @@ ${question}
   return prompt;
 };
 
-const getSchema = async (connection) => {
+const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
   const result = await connection.query("CALL show_tables() RETURN *;");
   const tables = await result.getAll();
   result.close();
-  const nodeTables = [];
-  const relTables = [];
+  const nodeTables: NodeTable[] = [];
+  const relTables: RelTable[] = [];
+
   for (const table of tables) {
-    const properties = (
-      await connection
-        .query(`CALL TABLE_INFO('${table.name}') RETURN *;`)
-        .then((res) => res.getAll())
-    ).map((property) => ({
-      name: property.name,
-      type: property.type,
-      isPrimaryKey: property["primary key"],
+    const tableInfo = await connection
+      .query(`CALL TABLE_INFO('${String(table.name)}') RETURN *;`)
+      .then((res) => res.getAll());
+
+    const properties = tableInfo.map((property) => ({
+      name: property.name as string,
+      type: property.type as string,
+      isPrimaryKey: property["primary key"] as boolean,
     }));
+
     if (table.type === TABLE_TYPES.NODE) {
-      delete table["type"];
-      delete table["database name"];
-      table.properties = properties;
-      nodeTables.push(table);
+      const nodeTable: NodeTable = {
+        name: table.name as string,
+        comment: table.comment as string,
+        properties,
+      };
+      nodeTables.push(nodeTable);
     } else if (table.type === TABLE_TYPES.REL) {
-      delete table["type"];
-      delete table["database name"];
-      properties.forEach((property) => {
-        delete property.isPrimaryKey;
-      });
-      table.properties = properties;
+      const propertiesWithoutPrimaryKey = properties.map(({ name, type }) => ({
+        name,
+        type,
+      }));
+
       const connectivity = await connection
-        .query(`CALL SHOW_CONNECTION('${table.name}') RETURN *;`)
+        .query(`CALL SHOW_CONNECTION('${String(table.name)}') RETURN *;`)
         .then((res) => res.getAll());
-      table.connectivity = [];
-      connectivity.forEach(c => {
-        table.connectivity.push({
-          src: c["source table name"],
-          dst: c["destination table name"],
-        });
-      });
-      relTables.push(table);
+
+      const relTable: RelTable = {
+        name: table.name as string,
+        comment: table.comment as string,
+        properties: propertiesWithoutPrimaryKey,
+        connectivity: connectivity.map((c) => ({
+          src: c["source table name"] as string,
+          dst: c["destination table name"] as string,
+        })),
+      };
+      relTables.push(relTable);
     }
   }
+
   nodeTables.sort((a, b) => a.name.localeCompare(b.name));
   relTables.sort((a, b) => a.name.localeCompare(b.name));
   return { nodeTables, relTables };
 };
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
+server.setRequestHandler(ListToolsRequestSchema, () => {
   return {
     tools: [
       {
@@ -157,6 +193,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: "The Cypher query to run",
             },
           },
+          required: ["cypher"],
         },
       },
       {
@@ -166,27 +203,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {},
         },
-      }
+      },
     ],
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   if (request.params.name === "query") {
-    const cypher = request.params.arguments.cypher;
-    try {
-      const queryResult = await conn.query(cypher);
-      const rows = await queryResult.getAll();
-      queryResult.close();
-      return {
-        content: [{
-          type: "text", text: JSON.stringify(rows, bigIntReplacer, 2)
-        }],
-        isError: false,
-      };
-    } catch (error) {
-      throw error;
+    const cypher = request.params.arguments?.cypher as string;
+    if (!cypher) {
+      throw new Error("Missing required argument: cypher");
     }
+
+    const queryResult = await conn.query(cypher);
+    const rows = await queryResult.getAll();
+    queryResult.close();
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(rows, bigIntReplacer, 2),
+        },
+      ],
+      isError: false,
+    };
   } else if (request.params.name === "getSchema") {
     const schema = await getSchema(conn);
     return {
@@ -197,7 +237,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error(`Unknown tool: ${request.params.name}`);
 });
 
-server.setRequestHandler(ListPromptsRequestSchema, async () => {
+server.setRequestHandler(ListPromptsRequestSchema, () => {
   return {
     prompts: [
       {
@@ -209,15 +249,19 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
             description: "The question in natural language to generate the Cypher query for",
             required: true,
           },
-        ]
-      }
+        ],
+      },
     ],
   };
 });
 
-server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptRequest) => {
   if (request.params.name === "generateKuzuCypher") {
-    const question = request.params.arguments.question;
+    const question = request.params.arguments?.question as string;
+    if (!question) {
+      throw new Error("Missing required argument: question");
+    }
+
     const schema = await getSchema(conn);
     return {
       messages: [
@@ -226,19 +270,20 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
           content: {
             type: "text",
             text: getPrompt(question, schema),
-          }
-        }
-      ]
-    }
+          },
+        },
+      ],
+    };
   }
   throw new Error(`Unknown prompt: ${request.params.name}`);
 });
 
-async function main() {
+async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 main().catch((error) => {
   console.error(error);
+  process.exit(1);
 });

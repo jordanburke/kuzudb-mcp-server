@@ -1,10 +1,22 @@
 FROM node:22
 
-# Copy app
+# Install pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+# Copy app files
 RUN mkdir -p /home/node/app
-COPY ./index.js /home/node/app
-COPY ./package.json /home/node/app
-COPY ./package-lock.json /home/node/app
+WORKDIR /home/node/app
+
+# Copy package files first for better caching
+COPY ./package.json ./pnpm-lock.yaml ./
+COPY ./tsconfig.json ./tsup.config.ts ./
+
+# Copy source files
+COPY ./src ./src
+
+# Set ownership
 RUN chown -R node:node /home/node/app
 
 # Make database directory and set permissions
@@ -14,12 +26,11 @@ RUN chown -R node:node /database
 # Switch to node user
 USER node
 
-# Set working directory
-WORKDIR /home/node/app
-
-# Install dependencies, generate grammar, and reduce size of kuzu node module
-# Done in one step to reduce image size
-RUN npm install &&\
+# Install dependencies and build
+RUN pnpm install --frozen-lockfile --prod=false && \
+    pnpm run build && \
+    pnpm prune --prod && \
+    rm -rf src tsconfig.json tsup.config.ts && \
     rm -rf node_modules/kuzu/prebuilt node_modules/kuzu/kuzu-source
 
 # Set environment variables
@@ -27,4 +38,4 @@ ENV NODE_ENV=production
 ENV KUZU_DB_PATH=/database
 
 # Run app
-ENTRYPOINT ["node", "index.js"]
+ENTRYPOINT ["node", "dist/index.js"]
