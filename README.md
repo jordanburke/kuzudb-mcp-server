@@ -43,9 +43,9 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
   Change the `{Absolute Path to the Kuzu database}` to the actual path
 - Restart Claude Desktop
 
-### With Node.js and pnpm (for Development)
-- Install dependencies: `pnpm install`
-- Build the project: `pnpm run build`
+### With npm/npx
+- Install globally: `npm install -g kuzu-mcp-server`
+- Or use directly with npx: `npx kuzu-mcp-server`
 - Edit the configuration file `config.json`:
   - on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
   - on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -54,20 +54,40 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
   {
     "mcpServers": {
         "kuzu": {
-            "command": "node",
+            "command": "npx",
             "args": [
-                "{Absolute Path to this repository}/dist/index.js",
-                "{Absolute Path to the Kuzu database}",
+                "kuzu-mcp-server",
+                "{Absolute Path to the Kuzu database}"
             ]
         }
     }
   }
   ```
-  Change the `{Absolute Path to this repository}` and `{Absolute Path to the Kuzu database}` to the actual paths
+  Change the `{Absolute Path to the Kuzu database}` to the actual path
 - Restart Claude Desktop
 
 ### Read-Only Mode
 The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environment variable to `true`. In this mode, running any query that attempts to modify the database will result in an error. This flag can be set in the configuration file as follows:
+
+#### With npm/npx:
+```json
+{
+    "mcpServers": {
+        "kuzu": {
+            "command": "npx",
+            "args": [
+                "kuzu-mcp-server",
+                "{Absolute Path to the Kuzu database}"
+            ],
+            "env": {
+                "KUZU_READ_ONLY": "true"
+            }
+        }
+    }
+}
+```
+
+#### With Docker:
 ```json
 {
     "mcpServers": {
@@ -82,7 +102,47 @@ The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environm
                 "--rm",
                 "-i",
                 "kuzudb/mcp-server"
-            ],
+            ]
+        }
+    }
+}
+```
+
+## Development
+
+To build from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/jordanburke/kuzu-mcp-server.git
+cd kuzu-mcp-server
+
+# Install dependencies
+pnpm install
+
+# Build the project
+pnpm run build
+
+# Run development mode with watch
+pnpm run dev
+
+# Run tests and linting
+pnpm run lint
+pnpm run typecheck
+pnpm run format:check
+```
+
+For local development, you can also configure Claude Desktop to use the local build:
+
+```json
+{
+    "mcpServers": {
+        "kuzu": {
+            "command": "node",
+            "args": [
+                "/path/to/kuzu-mcp-server/dist/index.js",
+                "/path/to/kuzu/database"
+            ]
         }
     }
 }
