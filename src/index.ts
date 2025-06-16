@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
@@ -9,48 +9,48 @@ import {
   GetPromptRequestSchema,
   CallToolRequest,
   GetPromptRequest,
-} from "@modelcontextprotocol/sdk/types.js";
-import * as kuzu from "kuzu";
-import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js";
+} from "@modelcontextprotocol/sdk/types.js"
+import * as kuzu from "kuzu"
+import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js"
 
 interface TableInfo {
-  name: string;
-  type: string;
-  isPrimaryKey: boolean;
+  name: string
+  type: string
+  isPrimaryKey: boolean
 }
 
 interface NodeTable {
-  name: string;
-  comment: string;
-  properties: TableInfo[];
+  name: string
+  comment: string
+  properties: TableInfo[]
 }
 
 interface RelTable {
-  name: string;
-  comment: string;
-  properties: Omit<TableInfo, "isPrimaryKey">[];
+  name: string
+  comment: string
+  properties: Omit<TableInfo, "isPrimaryKey">[]
   connectivity: Array<{
-    src: string;
-    dst: string;
-  }>;
+    src: string
+    dst: string
+  }>
 }
 
 interface Schema {
-  nodeTables: NodeTable[];
-  relTables: RelTable[];
+  nodeTables: NodeTable[]
+  relTables: RelTable[]
 }
 
 const TABLE_TYPES = {
   NODE: "NODE",
   REL: "REL",
-} as const;
+} as const
 
 const bigIntReplacer = (_: string, value: unknown): unknown => {
   if (typeof value === "bigint") {
-    return value.toString();
+    return value.toString()
   }
-  return value;
-};
+  return value
+}
 
 const server = new Server(
   {
@@ -63,20 +63,20 @@ const server = new Server(
       tools: {},
       prompts: {},
     },
-  }
-);
+  },
+)
 
 // Global variables for database connection
-let db: kuzu.Database;
-let conn: kuzu.Connection;
+let db: kuzu.Database
+let conn: kuzu.Connection
 
 process.on("SIGINT", () => {
-  process.exit(0);
-});
+  process.exit(0)
+})
 
 process.on("SIGTERM", () => {
-  process.exit(0);
-});
+  process.exit(0)
+})
 
 const getPrompt = (question: string, schema: Schema): string => {
   const prompt = `Task:Generate Kuzu Cypher statement to query a graph database.
@@ -109,44 +109,44 @@ Do not include any text except the generated Cypher statement.
 
 The question is:
 ${question}
-`;
-  return prompt;
-};
+`
+  return prompt
+}
 
 const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
-  const result = await connection.query("CALL show_tables() RETURN *;");
-  const tables = await result.getAll();
-  result.close();
-  const nodeTables: NodeTable[] = [];
-  const relTables: RelTable[] = [];
+  const result = await connection.query("CALL show_tables() RETURN *;")
+  const tables = await result.getAll()
+  result.close()
+  const nodeTables: NodeTable[] = []
+  const relTables: RelTable[] = []
 
   for (const table of tables) {
     const tableInfo = await connection
       .query(`CALL TABLE_INFO('${String(table.name)}') RETURN *;`)
-      .then((res) => res.getAll());
+      .then((res) => res.getAll())
 
     const properties = tableInfo.map((property) => ({
       name: property.name as string,
       type: property.type as string,
       isPrimaryKey: property["primary key"] as boolean,
-    }));
+    }))
 
     if (table.type === TABLE_TYPES.NODE) {
       const nodeTable: NodeTable = {
         name: table.name as string,
         comment: table.comment as string,
         properties,
-      };
-      nodeTables.push(nodeTable);
+      }
+      nodeTables.push(nodeTable)
     } else if (table.type === TABLE_TYPES.REL) {
       const propertiesWithoutPrimaryKey = properties.map(({ name, type }) => ({
         name,
         type,
-      }));
+      }))
 
       const connectivity = await connection
         .query(`CALL SHOW_CONNECTION('${String(table.name)}') RETURN *;`)
-        .then((res) => res.getAll());
+        .then((res) => res.getAll())
 
       const relTable: RelTable = {
         name: table.name as string,
@@ -156,15 +156,15 @@ const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
           src: c["source table name"] as string,
           dst: c["destination table name"] as string,
         })),
-      };
-      relTables.push(relTable);
+      }
+      relTables.push(relTable)
     }
   }
 
-  nodeTables.sort((a, b) => a.name.localeCompare(b.name));
-  relTables.sort((a, b) => a.name.localeCompare(b.name));
-  return { nodeTables, relTables };
-};
+  nodeTables.sort((a, b) => a.name.localeCompare(b.name))
+  relTables.sort((a, b) => a.name.localeCompare(b.name))
+  return { nodeTables, relTables }
+}
 
 server.setRequestHandler(ListToolsRequestSchema, () => {
   return {
@@ -192,19 +192,19 @@ server.setRequestHandler(ListToolsRequestSchema, () => {
         },
       },
     ],
-  };
-});
+  }
+})
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   if (request.params.name === "query") {
-    const cypher = request.params.arguments?.cypher as string;
+    const cypher = request.params.arguments?.cypher as string
     if (!cypher) {
-      throw new Error("Missing required argument: cypher");
+      throw new Error("Missing required argument: cypher")
     }
 
-    const queryResult = await conn.query(cypher);
-    const rows = await queryResult.getAll();
-    queryResult.close();
+    const queryResult = await conn.query(cypher)
+    const rows = await queryResult.getAll()
+    queryResult.close()
     return {
       content: [
         {
@@ -213,16 +213,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         },
       ],
       isError: false,
-    };
+    }
   } else if (request.params.name === "getSchema") {
-    const schema = await getSchema(conn);
+    const schema = await getSchema(conn)
     return {
       content: [{ type: "text", text: JSON.stringify(schema, null, 2) }],
       isError: false,
-    };
+    }
   }
-  throw new Error(`Unknown tool: ${request.params.name}`);
-});
+  throw new Error(`Unknown tool: ${request.params.name}`)
+})
 
 server.setRequestHandler(ListPromptsRequestSchema, () => {
   return {
@@ -239,17 +239,17 @@ server.setRequestHandler(ListPromptsRequestSchema, () => {
         ],
       },
     ],
-  };
-});
+  }
+})
 
 server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptRequest) => {
   if (request.params.name === "generateKuzuCypher") {
-    const question = request.params.arguments?.question as string;
+    const question = request.params.arguments?.question as string
     if (!question) {
-      throw new Error("Missing required argument: question");
+      throw new Error("Missing required argument: question")
     }
 
-    const schema = await getSchema(conn);
+    const schema = await getSchema(conn)
     return {
       messages: [
         {
@@ -260,69 +260,69 @@ server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptReques
           },
         },
       ],
-    };
+    }
   }
-  throw new Error(`Unknown prompt: ${request.params.name}`);
-});
+  throw new Error(`Unknown prompt: ${request.params.name}`)
+})
 
 async function main(): Promise<void> {
   // Parse command line arguments
-  const args = process.argv.slice(2);
-  const options = parseArgs(args);
-  
+  const args = process.argv.slice(2)
+  const options = parseArgs(args)
+
   // Handle CLI commands
   if (options.help) {
-    showHelp();
-    process.exit(0);
+    showHelp()
+    process.exit(0)
   }
-  
+
   if (options.version) {
-    showVersion();
-    process.exit(0);
+    showVersion()
+    process.exit(0)
   }
-  
+
   if (options.command === "inspect" && options.databasePath) {
-    await inspectDatabase(options.databasePath);
-    process.exit(0);
+    await inspectDatabase(options.databasePath)
+    process.exit(0)
   }
-  
+
   if (options.command === "validate" && options.databasePath) {
-    await validateDatabase(options.databasePath);
-    process.exit(0);
+    await validateDatabase(options.databasePath)
+    process.exit(0)
   }
-  
+
   if (options.command === "init" && options.databasePath) {
-    await initDatabase(options.databasePath, options.template);
-    process.exit(0);
+    await initDatabase(options.databasePath, options.template)
+    process.exit(0)
   }
-  
+
   if (options.command === "test") {
-    await runTests();
-    process.exit(0);
+    await runTests()
+    process.exit(0)
   }
-  
+
   // Default: Start MCP server
   if (!options.databasePath) {
-    console.error("Error: Database path is required");
-    showHelp();
-    process.exit(1);
+    console.error("Error: Database path is required")
+    showHelp()
+    process.exit(1)
   }
-  
+
   // Apply options from CLI
   if (options.readonly) {
-    process.env.KUZU_READ_ONLY = "true";
+    process.env.KUZU_READ_ONLY = "true"
   }
-  
+
   // Initialize database for MCP server
-  const isReadOnly = options.readonly || process.env.KUZU_READ_ONLY === "true";
-  db = new kuzu.Database(options.databasePath, 0, true, isReadOnly);
-  conn = new kuzu.Connection(db);
-  
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  const isReadOnly = options.readonly || process.env.KUZU_READ_ONLY === "true"
+  db = new kuzu.Database(options.databasePath, 0, true, isReadOnly)
+  conn = new kuzu.Connection(db)
+
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+  console.error(error)
+  process.exit(1)
+})
