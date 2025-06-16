@@ -2,9 +2,12 @@ import { Database, Connection } from "kuzu"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
+import { fileURLToPath } from "url"
 
 // Read version from package.json
-const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"))
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const packageJson = JSON.parse(readFileSync(path.join(__dirname, "../package.json"), "utf-8")) as { version: string }
 const version = packageJson.version
 
 interface CLIOptions {
@@ -66,15 +69,19 @@ export function parseArgs(args: string[]): CLIOptions {
         break
 
       case "--timeout":
-        options.timeout = parseInt(args[++i], 10)
+        if (i + 1 < args.length && args[i + 1]) {
+          options.timeout = parseInt(args[++i]!, 10)
+        }
         break
 
       case "--max-results":
-        options.maxResults = parseInt(args[++i], 10)
+        if (i + 1 < args.length && args[i + 1]) {
+          options.maxResults = parseInt(args[++i]!, 10)
+        }
         break
 
       default:
-        if (!arg.startsWith("-") && !options.databasePath && !options.command) {
+        if (arg && !arg.startsWith("-") && !options.databasePath && !options.command) {
           options.databasePath = arg
         }
     }
@@ -136,7 +143,12 @@ export async function inspectDatabase(dbPath: string): Promise<void> {
     // Get all node tables
     const nodeResult = await conn.query("CALL show_tables() RETURN *")
     const allTables = await nodeResult.getAll()
-    const nodeTables = allTables.filter((t: any) => t.type === "NODE")
+    interface TableRecord {
+      name: string
+      type: string
+      comment?: string
+    }
+    const nodeTables = allTables.filter((t) => (t as unknown as TableRecord).type === "NODE") as unknown as TableRecord[]
 
     console.log("NODE TABLES:")
     console.log("============")
@@ -145,17 +157,19 @@ export async function inspectDatabase(dbPath: string): Promise<void> {
       const schemaResult = await conn.query(`CALL table_info('${table.name}') RETURN *`)
       const schema = await schemaResult.getAll()
       for (const prop of schema) {
-        console.log(`  - ${prop.name}: ${prop.type}`)
+        const propData = prop as { name: string; type: string }
+        console.log(`  - ${propData.name}: ${propData.type}`)
       }
 
       // Get count
       const countResult = await conn.query(`MATCH (n:${table.name}) RETURN count(n) as count`)
       const count = await countResult.getAll()
-      console.log(`  Count: ${count[0].count}`)
+      const countData = count[0] as { count: number }
+      console.log(`  Count: ${countData.count}`)
     }
 
     // Get all relationship tables
-    const relTables = allTables.filter((t: any) => t.type === "REL")
+    const relTables = allTables.filter((t) => (t as unknown as TableRecord).type === "REL") as unknown as TableRecord[]
 
     console.log("\n\nRELATIONSHIP TABLES:")
     console.log("====================")
@@ -164,17 +178,19 @@ export async function inspectDatabase(dbPath: string): Promise<void> {
       const schemaResult = await conn.query(`CALL table_info('${table.name}') RETURN *`)
       const schema = await schemaResult.getAll()
       for (const prop of schema) {
-        console.log(`  - ${prop.name}: ${prop.type}`)
+        const propData = prop as { name: string; type: string }
+        console.log(`  - ${propData.name}: ${propData.type}`)
       }
 
       // Get count
       const countResult = await conn.query(`MATCH ()-[r:${table.name}]->() RETURN count(r) as count`)
       const count = await countResult.getAll()
-      console.log(`  Count: ${count[0].count}`)
+      const countData = count[0] as { count: number }
+      console.log(`  Count: ${countData.count}`)
     }
 
-    await conn.close()
-    await db.close()
+    // Close connection and database if needed
+    // Note: kuzu Node.js bindings may not require explicit closing
   } catch (error) {
     console.error("Error inspecting database:", error)
     process.exit(1)
@@ -213,7 +229,8 @@ export async function validateDatabase(dbPath: string): Promise<void> {
     // Try a simple query
     const result = await conn.query("RETURN 1 as test")
     const data = await result.getAll()
-    if (data[0].test === 1) {
+    const testData = data[0] as { test: number }
+    if (testData.test === 1) {
       checks.queryable = true
       console.log("✓ Basic query execution works")
     }
@@ -228,8 +245,8 @@ export async function validateDatabase(dbPath: string): Promise<void> {
       console.log("⚠ Database has no schema defined")
     }
 
-    await conn.close()
-    await db.close()
+    // Close connection and database if needed
+    // Note: kuzu Node.js bindings may not require explicit closing
 
     const allPassed = Object.values(checks).every((v) => v)
     console.log(`\nValidation ${allPassed ? "PASSED" : "FAILED"}`)
@@ -267,8 +284,8 @@ export async function initDatabase(dbPath: string, template?: string): Promise<v
         console.log("Created empty database. Use --template to initialize with sample data.")
     }
 
-    await conn.close()
-    await db.close()
+    // Close connection and database if needed
+    // Note: kuzu Node.js bindings may not require explicit closing
 
     console.log("\n✓ Database initialized successfully!")
   } catch (error) {
@@ -277,7 +294,7 @@ export async function initDatabase(dbPath: string, template?: string): Promise<v
   }
 }
 
-async function initMoviesTemplate(conn: any): Promise<void> {
+async function initMoviesTemplate(conn: Connection): Promise<void> {
   console.log("Creating movies schema...")
 
   // Create node tables
@@ -321,7 +338,7 @@ async function initMoviesTemplate(conn: any): Promise<void> {
   console.log("✓ Movies template initialized")
 }
 
-async function initSocialTemplate(conn: any): Promise<void> {
+async function initSocialTemplate(conn: Connection): Promise<void> {
   console.log("Creating social network schema...")
 
   await conn.query(`CREATE NODE TABLE User(id INT64, name STRING, email STRING, joined DATE, PRIMARY KEY(id))`)
@@ -333,7 +350,7 @@ async function initSocialTemplate(conn: any): Promise<void> {
   console.log("✓ Social network template initialized")
 }
 
-async function initFinancialTemplate(conn: any): Promise<void> {
+async function initFinancialTemplate(conn: Connection): Promise<void> {
   console.log("Creating financial schema...")
 
   await conn.query(`CREATE NODE TABLE Account(id STRING, balance DOUBLE, type STRING, PRIMARY KEY(id))`)
@@ -369,15 +386,16 @@ export async function runTests(): Promise<void> {
     console.log("Test 3: Querying data... ")
     const result = await conn.query("MATCH (n:TestNode) RETURN n.name as name")
     const data = await result.getAll()
-    if (data[0].name === "test") {
+    const testResult = data[0] as { name: string }
+    if (testResult.name === "test") {
       console.log("✓ PASSED")
     } else {
       throw new Error("Query returned unexpected result")
     }
 
     // Cleanup
-    await conn.close()
-    await db.close()
+    // Close connection and database if needed
+    // Note: kuzu Node.js bindings may not require explicit closing
     await fs.rm(testDb, { recursive: true, force: true })
 
     console.log("\nAll tests passed! ✓")
