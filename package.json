@@ -1,12 +1,12 @@
 {
-  "name": "kuzu-mcp-server",
+  "name": "kuzudb-mcp-server",
   "version": "0.1.0",
   "description": "Kuzu MCP server implementation",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "bin": {
-    "kuzu-mcp-server": "./dist/index.js"
+    "kuzudb-mcp-server": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
@@ -23,12 +23,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jordanburke/kuzu-mcp-server.git"
+    "url": "git+https://github.com/jordanburke/kuzudb-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/jordanburke/kuzu-mcp-server/issues"
+    "url": "https://github.com/jordanburke/kuzudb-mcp-server/issues"
   },
-  "homepage": "https://github.com/jordanburke/kuzu-mcp-server#readme",
+  "homepage": "https://github.com/jordanburke/kuzudb-mcp-server#readme",
   "keywords": [
     "mcp",
     "kuzu",

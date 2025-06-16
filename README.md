@@ -1,4 +1,4 @@
-# kuzu-mcp-server
+# kuzudb-mcp-server
 
 A Model Context Protocol server that provides access to Kuzu databases. This server enables LLMs to inspect database schemas and execute queries on provided kuzu database.
 
@@ -44,8 +44,8 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
 - Restart Claude Desktop
 
 ### With npm/npx
-- Install globally: `npm install -g kuzu-mcp-server`
-- Or use directly with npx: `npx kuzu-mcp-server`
+- Install globally: `npm install -g kuzudb-mcp-server`
+- Or use directly with npx: `npx kuzudb-mcp-server`
 - Edit the configuration file `config.json`:
   - on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
   - on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -56,7 +56,7 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
         "kuzu": {
             "command": "npx",
             "args": [
-                "kuzu-mcp-server",
+                "kuzudb-mcp-server",
                 "{Absolute Path to the Kuzu database}"
             ]
         }
@@ -76,7 +76,7 @@ The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environm
         "kuzu": {
             "command": "npx",
             "args": [
-                "kuzu-mcp-server",
+                "kuzudb-mcp-server",
                 "{Absolute Path to the Kuzu database}"
             ],
             "env": {
@@ -114,8 +114,8 @@ To build from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jordanburke/kuzu-mcp-server.git
-cd kuzu-mcp-server
+git clone https://github.com/jordanburke/kuzudb-mcp-server.git
+cd kuzudb-mcp-server
 
 # Install dependencies
 pnpm install
@@ -140,7 +140,7 @@ For local development, you can also configure Claude Desktop to use the local bu
         "kuzu": {
             "command": "node",
             "args": [
-                "/path/to/kuzu-mcp-server/dist/index.js",
+                "/path/to/kuzudb-mcp-server/dist/index.js",
                 "/path/to/kuzu/database"
             ]
         }
