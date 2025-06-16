@@ -11,6 +11,7 @@ import {
   GetPromptRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as kuzu from "kuzu";
+import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js";
 
 interface TableInfo {
   name: string;
@@ -65,22 +66,9 @@ const server = new Server(
   }
 );
 
-let dbPath: string;
-
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  const envDbPath = process.env.KUZU_DB_PATH;
-  if (envDbPath) {
-    dbPath = envDbPath;
-  } else {
-    console.error("Please provide a path to kuzu database as a command line argument");
-    process.exit(1);
-  }
-} else {
-  dbPath = args[0]!;
-}
-
-const isReadOnly = process.env.KUZU_READ_ONLY === "true";
+// Global variables for database connection
+let db: kuzu.Database;
+let conn: kuzu.Connection;
 
 process.on("SIGINT", () => {
   process.exit(0);
@@ -89,9 +77,6 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   process.exit(0);
 });
-
-const db = new kuzu.Database(dbPath, 0, true, isReadOnly);
-const conn = new kuzu.Connection(db);
 
 const getPrompt = (question: string, schema: Schema): string => {
   const prompt = `Task:Generate Kuzu Cypher statement to query a graph database.
@@ -281,6 +266,58 @@ server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptReques
 });
 
 async function main(): Promise<void> {
+  // Parse command line arguments
+  const args = process.argv.slice(2);
+  const options = parseArgs(args);
+  
+  // Handle CLI commands
+  if (options.help) {
+    showHelp();
+    process.exit(0);
+  }
+  
+  if (options.version) {
+    showVersion();
+    process.exit(0);
+  }
+  
+  if (options.command === "inspect" && options.databasePath) {
+    await inspectDatabase(options.databasePath);
+    process.exit(0);
+  }
+  
+  if (options.command === "validate" && options.databasePath) {
+    await validateDatabase(options.databasePath);
+    process.exit(0);
+  }
+  
+  if (options.command === "init" && options.databasePath) {
+    await initDatabase(options.databasePath, options.template);
+    process.exit(0);
+  }
+  
+  if (options.command === "test") {
+    await runTests();
+    process.exit(0);
+  }
+  
+  // Default: Start MCP server
+  if (!options.databasePath) {
+    console.error("Error: Database path is required");
+    showHelp();
+    process.exit(1);
+  }
+  
+  // Apply options from CLI
+  if (options.readonly) {
+    process.env.KUZU_READ_ONLY = "true";
+  }
+  
+  // Initialize database for MCP server
+  const isReadOnly = options.readonly || process.env.KUZU_READ_ONLY === "true";
+  db = new kuzu.Database(options.databasePath, 0, true, isReadOnly);
+  conn = new kuzu.Connection(db);
+  
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
