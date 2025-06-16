@@ -1,10 +1,13 @@
 {
-  "name": "kuzu-mcp",
-  "version": "0.0.1",
+  "name": "kuzu-mcp-server",
+  "version": "0.1.0",
   "description": "Kuzu MCP server implementation",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "bin": {
+    "kuzu-mcp-server": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -16,8 +19,31 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "prepublishOnly": "pnpm run build"
   },
-  "author": "",
+  "author": "Jordan Burke",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jordanburke/kuzu-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jordanburke/kuzu-mcp-server/issues"
+  },
+  "homepage": "https://github.com/jordanburke/kuzu-mcp-server#readme",
+  "keywords": [
+    "mcp",
+    "kuzu",
+    "graph",
+    "database",
+    "cypher"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
     "kuzu": "0.10.0"
