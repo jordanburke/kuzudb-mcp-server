@@ -148,7 +148,9 @@ export async function inspectDatabase(dbPath: string): Promise<void> {
       type: string
       comment?: string
     }
-    const nodeTables = allTables.filter((t) => (t as unknown as TableRecord).type === "NODE") as unknown as TableRecord[]
+    const nodeTables = allTables.filter(
+      (t) => (t as unknown as TableRecord).type === "NODE",
+    ) as unknown as TableRecord[]
 
     console.log("NODE TABLES:")
     console.log("============")
