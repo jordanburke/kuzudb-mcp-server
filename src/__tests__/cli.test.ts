@@ -219,7 +219,7 @@ describe("CLI Functions", () => {
             setTimeout(() => {
               if (logs[nextLogIndex] && logs[nextLogIndex].includes("Creating database at:")) {
                 const match = logs[nextLogIndex].match(/Creating database at: (.+test-db-\d+)/)
-                if (match) {
+                if (match && match[1]) {
                   testDbPath = match[1].replace(process.cwd() + "/", "./")
                 }
               }
