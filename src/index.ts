@@ -205,6 +205,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
   if (request.params.name === "query") {
     const cypher = request.params.arguments?.cypher as string
     console.error("DEBUG: Query received with cypher:", cypher)
+    console.error("DEBUG: typeof cypher:", typeof cypher)
+    console.error("DEBUG: cypher === null:", cypher === null)
+    console.error("DEBUG: cypher === undefined:", cypher === undefined)
+    console.error("DEBUG: Full arguments:", JSON.stringify(request.params.arguments, null, 2))
+
+    if (!cypher) {
+      throw new Error(`Invalid cypher query: ${cypher}`)
+    }
 
     try {
       // Check if query is a write operation in read-only mode
