@@ -1,9 +1,9 @@
 // Mock implementation of kuzu for testing
-import * as fs from "fs/promises"
+import * as fsSync from "fs"
 import * as path from "path"
 
 export class Database {
-  private initPromise?: Promise<void>
+  public initPromise?: Promise<void>
 
   constructor(
     public dbPath: string,
@@ -11,22 +11,13 @@ export class Database {
     public readonly = false,
     public compress = true,
   ) {
-    // Create mock database files
+    // Create mock database files synchronously to avoid race conditions
     if (!readonly) {
       const fullPath = path.resolve(dbPath)
-      this.initPromise = fs
-        .mkdir(fullPath, { recursive: true })
-        .then(async () => {
-          await fs.writeFile(path.join(fullPath, "catalog.kz"), "mock catalog")
-          await fs.writeFile(path.join(fullPath, "data.kz"), "mock data")
-        })
-        .catch(() => {})
-    }
-  }
-
-  async waitForInit(): Promise<void> {
-    if (this.initPromise) {
-      await this.initPromise
+      // Create directory synchronously
+      fsSync.mkdirSync(fullPath, { recursive: true })
+      fsSync.writeFileSync(path.join(fullPath, "catalog.kz"), "mock catalog")
+      fsSync.writeFileSync(path.join(fullPath, "data.kz"), "mock data")
     }
   }
 }
