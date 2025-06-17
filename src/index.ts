@@ -12,6 +12,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import * as kuzu from "kuzu"
 import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js"
+import { execSync } from "child_process"
+import * as path from "path"
+import * as fs from "fs"
 
 interface TableInfo {
   name: string
@@ -50,6 +53,53 @@ const bigIntReplacer = (_: string, value: unknown): unknown => {
     return value.toString()
   }
   return value
+}
+
+async function ensureKuzuInstalled(): Promise<void> {
+  // Find the kuzu module directory
+  let kuzuPath: string | null = null
+  
+  // Try to resolve kuzu module path
+  try {
+    kuzuPath = path.dirname(require.resolve('kuzu/package.json'))
+  } catch (error) {
+    console.error('❌ Kuzu module not found. Please ensure kuzu is installed.')
+    throw new Error('Kuzu module not found')
+  }
+  
+  // Check if kuzu is properly installed by looking for index.js
+  const indexFile = path.join(kuzuPath, 'index.js')
+  
+  if (fs.existsSync(indexFile)) {
+    console.error('✓ Kuzu is already properly installed')
+    return
+  }
+  
+  console.error('🔧 Installing kuzu native binaries...')
+  
+  // Check if install script exists
+  const installScript = path.join(kuzuPath, 'install.js')
+  if (!fs.existsSync(installScript)) {
+    console.error('⚠️  Kuzu install script not found, skipping install')
+    return
+  }
+  
+  try {
+    // Change to kuzu directory and run install script
+    const originalCwd = process.cwd()
+    process.chdir(kuzuPath)
+    
+    execSync('node install.js', { stdio: 'inherit' })
+    
+    // Change back to original directory
+    process.chdir(originalCwd)
+    
+    console.error('✓ Kuzu native binaries installed successfully')
+  } catch (error) {
+    console.error('❌ Failed to install kuzu native binaries:', error instanceof Error ? error.message : String(error))
+    console.error('This may cause the MCP server to fail at runtime')
+    // Don't fail the entire process - let kuzu try to load anyway
+  }
 }
 
 const server = new Server(
@@ -304,6 +354,9 @@ server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptReques
 })
 
 async function main(): Promise<void> {
+  // Ensure kuzu is properly installed before doing anything
+  await ensureKuzuInstalled()
+  
   // Parse command line arguments
   const args = process.argv.slice(2)
   const options = parseArgs(args)
