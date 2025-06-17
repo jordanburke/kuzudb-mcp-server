@@ -58,67 +58,67 @@ const bigIntReplacer = (_: string, value: unknown): unknown => {
 async function ensureKuzuInstalled(): Promise<void> {
   // Find the kuzu module directory
   let kuzuPath: string | null = null
-  
+
   // Try to resolve kuzu module path using import.meta.resolve or require.resolve
   try {
     // For ES modules, we can use require.resolve within a try-catch
     // since we're running in Node.js environment with CommonJS interop
-    const createRequire = (await import('module')).createRequire
+    const createRequire = (await import("module")).createRequire
     const require = createRequire(import.meta.url)
-    kuzuPath = path.dirname(require.resolve('kuzu/package.json'))
+    kuzuPath = path.dirname(require.resolve("kuzu/package.json"))
     console.error(`🔍 Found kuzu at: ${kuzuPath}`)
   } catch (error) {
-    console.error('❌ Kuzu module not found. Please ensure kuzu is installed.')
-    console.error('Error details:', error instanceof Error ? error.message : String(error))
-    throw new Error('Kuzu module not found')
+    console.error("❌ Kuzu module not found. Please ensure kuzu is installed.")
+    console.error("Error details:", error instanceof Error ? error.message : String(error))
+    throw new Error("Kuzu module not found")
   }
-  
+
   // Check if kuzu is properly installed by looking for index.js
-  const indexFile = path.join(kuzuPath, 'index.js')
-  const kuzujsNode = path.join(kuzuPath, 'kuzujs.node')
-  
+  const indexFile = path.join(kuzuPath, "index.js")
+  const kuzujsNode = path.join(kuzuPath, "kuzujs.node")
+
   console.error(`🔍 Checking for index.js at: ${indexFile}`)
   console.error(`🔍 Checking for kuzujs.node at: ${kuzujsNode}`)
-  
+
   if (fs.existsSync(indexFile) && fs.existsSync(kuzujsNode)) {
-    console.error('✓ Kuzu is already properly installed')
+    console.error("✓ Kuzu is already properly installed")
     return
   }
-  
-  console.error('🔧 Installing kuzu native binaries...')
-  
+
+  console.error("🔧 Installing kuzu native binaries...")
+
   // Check if install script exists
-  const installScript = path.join(kuzuPath, 'install.js')
+  const installScript = path.join(kuzuPath, "install.js")
   console.error(`🔍 Looking for install script at: ${installScript}`)
-  
+
   if (!fs.existsSync(installScript)) {
-    console.error('⚠️  Kuzu install script not found, skipping install')
+    console.error("⚠️  Kuzu install script not found, skipping install")
     return
   }
-  
+
   try {
     // Change to kuzu directory and run install script
     const originalCwd = process.cwd()
     console.error(`📁 Changing to kuzu directory: ${kuzuPath}`)
     process.chdir(kuzuPath)
-    
-    console.error('🚀 Running kuzu install script...')
-    execSync('node install.js', { stdio: 'inherit' })
-    
+
+    console.error("🚀 Running kuzu install script...")
+    execSync("node install.js", { stdio: "inherit" })
+
     // Change back to original directory
     process.chdir(originalCwd)
-    
-    console.error('✓ Kuzu native binaries installed successfully')
-    
+
+    console.error("✓ Kuzu native binaries installed successfully")
+
     // Verify installation
     if (fs.existsSync(indexFile) && fs.existsSync(kuzujsNode)) {
-      console.error('✓ Installation verified - all required files present')
+      console.error("✓ Installation verified - all required files present")
     } else {
-      console.error('⚠️  Installation may be incomplete - some files missing')
+      console.error("⚠️  Installation may be incomplete - some files missing")
     }
   } catch (error) {
-    console.error('❌ Failed to install kuzu native binaries:', error instanceof Error ? error.message : String(error))
-    console.error('This may cause the MCP server to fail at runtime')
+    console.error("❌ Failed to install kuzu native binaries:", error instanceof Error ? error.message : String(error))
+    console.error("This may cause the MCP server to fail at runtime")
     // Don't fail the entire process - let kuzu try to load anyway
   }
 }
@@ -377,7 +377,7 @@ server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptReques
 async function main(): Promise<void> {
   // Ensure kuzu is properly installed before doing anything
   await ensureKuzuInstalled()
-  
+
   // Parse command line arguments
   const args = process.argv.slice(2)
   const options = parseArgs(args)
