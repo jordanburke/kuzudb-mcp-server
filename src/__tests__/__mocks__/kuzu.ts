@@ -3,6 +3,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 export class Database {
+  private initPromise?: Promise<void>
+
   constructor(
     public dbPath: string,
     public bufferPoolSize = 0,
@@ -12,13 +14,19 @@ export class Database {
     // Create mock database files
     if (!readonly) {
       const fullPath = path.resolve(dbPath)
-      void fs
+      this.initPromise = fs
         .mkdir(fullPath, { recursive: true })
         .then(async () => {
           await fs.writeFile(path.join(fullPath, "catalog.kz"), "mock catalog")
           await fs.writeFile(path.join(fullPath, "data.kz"), "mock data")
         })
         .catch(() => {})
+    }
+  }
+
+  async waitForInit(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise
     }
   }
 }

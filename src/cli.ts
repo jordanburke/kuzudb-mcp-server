@@ -412,6 +412,8 @@ export async function runTests(): Promise<void> {
     // Cleanup
     // Close connection and database if needed
     // Note: kuzu Node.js bindings may not require explicit closing
+    // Add small delay to ensure all async file operations complete
+    await new Promise((resolve) => setTimeout(resolve, 100))
     await fs.rm(testDb, { recursive: true, force: true })
 
     console.log("\nAll tests passed! ✓")

@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./src/__tests__/setup.ts'],
+    setupFiles: ['./src/__tests__/setup.ts', './src/__tests__/cleanup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -16,6 +16,8 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData.ts',
         '**/__mocks__/**',
+        '**/setup.ts',
+        '**/cleanup.ts',
         'test-mcp.js'
       ],
     },

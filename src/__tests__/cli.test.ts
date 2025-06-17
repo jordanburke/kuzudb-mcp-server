@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import * as fs from "fs/promises"
 import { parseArgs, showHelp, showVersion, validateDatabase, initDatabase, runTests } from "../cli"
 
@@ -89,14 +89,23 @@ describe("CLI Functions", () => {
   })
 
   describe("Database operations", () => {
-    const testDbPath = "./test-db-" + Date.now()
+    let testDbPath: string
+
+    beforeEach(() => {
+      // Create unique path for each test
+      testDbPath = "./test-db-" + Date.now() + "-" + Math.random().toString(36).substring(7)
+    })
 
     afterEach(async () => {
       // Cleanup test database
-      try {
-        await fs.rm(testDbPath, { recursive: true, force: true })
-      } catch {
-        // Ignore cleanup errors
+      if (testDbPath) {
+        try {
+          // Add delay to ensure all async operations complete
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          await fs.rm(testDbPath, { recursive: true, force: true })
+        } catch (error) {
+          console.warn(`Failed to cleanup ${testDbPath}:`, error)
+        }
       }
     })
 
@@ -198,7 +207,25 @@ describe("CLI Functions", () => {
       it("should run the built-in test suite successfully", async () => {
         const logs: string[] = []
         const originalLog = console.log
-        console.log = (msg: string) => logs.push(msg)
+        let testDbPath: string | undefined
+
+        console.log = (msg: string) => {
+          logs.push(msg)
+          // Capture the test database path
+          if (msg.includes("Creating test database")) {
+            // The runTests function creates a db with pattern ./test-db-{timestamp}
+            // We need to capture it from the logs
+            const nextLogIndex = logs.length
+            setTimeout(() => {
+              if (logs[nextLogIndex] && logs[nextLogIndex].includes("Creating database at:")) {
+                const match = logs[nextLogIndex].match(/Creating database at: (.+test-db-\d+)/)
+                if (match) {
+                  testDbPath = match[1].replace(process.cwd() + "/", "./")
+                }
+              }
+            }, 0)
+          }
+        }
 
         try {
           await runTests()
@@ -210,6 +237,29 @@ describe("CLI Functions", () => {
           expect(logs.some((log) => log.includes("All tests passed!"))).toBe(true)
         } finally {
           console.log = originalLog
+
+          // Clean up the test database created by runTests
+          if (testDbPath || logs.some((log) => log.includes("test-db-"))) {
+            // Try to find the database path from logs
+            if (!testDbPath) {
+              for (const log of logs) {
+                const match = log.match(/test-db-\d+/)
+                if (match) {
+                  testDbPath = "./" + match[0]
+                  break
+                }
+              }
+            }
+
+            if (testDbPath) {
+              try {
+                await new Promise((resolve) => setTimeout(resolve, 200))
+                await fs.rm(testDbPath, { recursive: true, force: true })
+              } catch (error) {
+                console.warn(`Failed to cleanup runTests database ${testDbPath}:`, error)
+              }
+            }
+          }
         }
       })
     })
