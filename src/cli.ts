@@ -51,7 +51,12 @@ export function parseArgs(args: string[]): CLIOptions {
 
       case "--template":
       case "-t":
-        options.template = args[++i]
+        if (i + 1 < args.length && args[i + 1] && !args[i + 1]!.startsWith("-")) {
+          options.template = args[++i]
+        } else {
+          console.error("Error: --template requires a value (movies, social, or financial)")
+          process.exit(1)
+        }
         break
 
       case "--validate":
@@ -266,10 +271,19 @@ export async function initDatabase(dbPath: string, template?: string): Promise<v
   }
 
   try {
-    // Create directory if it doesn't exist
-    await fs.mkdir(path.dirname(dbPath), { recursive: true })
+    // Resolve the full path
+    const fullPath = path.resolve(dbPath)
 
-    const db = new Database(dbPath)
+    // For relative paths like ./kuzu, we need to ensure the directory exists
+    // If dbPath is just a name without directory separators, create it in current directory
+    const dirPath = path.dirname(fullPath)
+    if (dirPath && dirPath !== "." && dirPath !== fullPath) {
+      await fs.mkdir(dirPath, { recursive: true })
+    }
+
+    console.log(`Creating database at: ${fullPath}`)
+
+    const db = new Database(fullPath)
     const conn = new Connection(db)
 
     switch (template) {

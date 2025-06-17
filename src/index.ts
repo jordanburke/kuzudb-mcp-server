@@ -197,22 +197,40 @@ server.setRequestHandler(ListToolsRequestSchema, () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   if (request.params.name === "query") {
-    const cypher = request.params.arguments?.cypher as string
+    const args = request.params.arguments
+    // Support both 'cypher' and 'query' parameter names
+    const cypher = (args?.cypher || args?.query) as string
+
+    // Debug logging to understand what's being passed
     if (!cypher) {
-      throw new Error("Missing required argument: cypher")
+      console.error("Query tool called with arguments:", JSON.stringify(args))
+      throw new Error(`Missing required argument: cypher. Received: ${JSON.stringify(args)}`)
     }
 
-    const queryResult = await conn.query(cypher)
-    const rows = await queryResult.getAll()
-    queryResult.close()
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(rows, bigIntReplacer, 2),
-        },
-      ],
-      isError: false,
+    try {
+      // Check if query is a write operation in read-only mode
+      const isReadOnly = process.env.KUZU_READ_ONLY === "true"
+      const isWriteQuery = /^\s*(CREATE|MERGE|DELETE|SET|REMOVE|MATCH.*DELETE|MATCH.*SET)/i.test(cypher)
+
+      if (isReadOnly && isWriteQuery) {
+        throw new Error("Cannot execute write queries in read-only mode")
+      }
+
+      const queryResult = await conn.query(cypher)
+      const rows = await queryResult.getAll()
+      queryResult.close()
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(rows, bigIntReplacer, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error) {
+      console.error("Query execution error:", error)
+      throw error
     }
   } else if (request.params.name === "getSchema") {
     const schema = await getSchema(conn)

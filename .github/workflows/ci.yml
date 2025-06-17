@@ -2,17 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [20.x, 22.x]
 
     steps:
       - name: Checkout repository
@@ -20,6 +21,8 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -42,7 +45,19 @@ jobs:
       - name: Build project
         run: pnpm run build
 
+      - name: Run tests
+        run: pnpm run test:coverage
+        timeout-minutes: 5
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '22.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+
       - name: Verify build output
+        shell: bash
         run: |
           if [ ! -f "dist/index.js" ]; then
             echo "Build failed: dist/index.js not found"
@@ -56,3 +71,35 @@ jobs:
             echo "Build failed: dist/index.d.ts not found"
             exit 1
           fi
+
+  publish-dry-run:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack
+        run: pnpm pack
+
+      - name: Check package contents
+        run: |
+          echo "Package contents:"
+          tar -tzf kuzudb-mcp-server-*.tgz | head -20

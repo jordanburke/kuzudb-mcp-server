@@ -18,6 +18,8 @@ export default [
       globals: {
         console: 'readonly',
         process: 'readonly',
+        setTimeout: 'readonly',
+        Buffer: 'readonly',
       },
     },
     plugins: {
@@ -39,6 +41,6 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/', 'dist/', '*.js', '*.mjs', '*.cjs', 'tsup.config.ts'],
+    ignores: ['node_modules/', 'dist/', '*.js', '*.mjs', '*.cjs', 'tsup.config.ts', 'vitest.config.ts'],
   },
 ];
