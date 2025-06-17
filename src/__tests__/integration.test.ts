@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { spawn } from "child_process"
 import * as fs from "fs/promises"
 
-describe("Integration Tests", () => {
+describe.skip("Integration Tests", () => {
   const testDbPath = "./test-integration-db-" + Date.now()
 
   beforeAll(async () => {

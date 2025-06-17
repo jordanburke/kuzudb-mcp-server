@@ -115,6 +115,8 @@ describe("CLI Functions", () => {
 
       it("should create database with movies template", async () => {
         await initDatabase(testDbPath, "movies")
+        // Wait for files to be created
+        await new Promise((resolve) => setTimeout(resolve, 100))
 
         // Check that database files exist
         const files = await fs.readdir(testDbPath)
@@ -124,6 +126,8 @@ describe("CLI Functions", () => {
 
       it("should create database with social template", async () => {
         await initDatabase(testDbPath, "social")
+        // Wait for files to be created
+        await new Promise((resolve) => setTimeout(resolve, 100))
 
         const files = await fs.readdir(testDbPath)
         expect(files).toContain("catalog.kz")
@@ -131,6 +135,8 @@ describe("CLI Functions", () => {
 
       it("should create database with financial template", async () => {
         await initDatabase(testDbPath, "financial")
+        // Wait for files to be created
+        await new Promise((resolve) => setTimeout(resolve, 100))
 
         const files = await fs.readdir(testDbPath)
         expect(files).toContain("catalog.kz")
@@ -141,6 +147,8 @@ describe("CLI Functions", () => {
       it("should validate a properly initialized database", async () => {
         // First create a database
         await initDatabase(testDbPath, "movies")
+        // Wait for files to be created
+        await new Promise((resolve) => setTimeout(resolve, 100))
 
         // Mock console.log to capture output
         const logs: string[] = []
