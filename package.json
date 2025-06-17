@@ -21,7 +21,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run format:check && pnpm run test:coverage && pnpm run build",
-    "clean:test-dbs": "node scripts/clean-test-dbs.js"
+    "clean:test-dbs": "node scripts/clean-test-dbs.js",
+    "postinstall": "node scripts/postinstall.js"
   },
   "author": "Jordan Burke",
   "license": "MIT",
