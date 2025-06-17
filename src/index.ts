@@ -114,56 +114,61 @@ ${question}
 }
 
 const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
-  const result = await connection.query("CALL show_tables() RETURN *;")
-  const tables = await result.getAll()
-  result.close()
-  const nodeTables: NodeTable[] = []
-  const relTables: RelTable[] = []
+  try {
+    const result = await connection.query("CALL show_tables() RETURN *;")
+    const tables = await result.getAll()
+    result.close()
+    const nodeTables: NodeTable[] = []
+    const relTables: RelTable[] = []
 
-  for (const table of tables) {
-    const tableInfo = await connection
-      .query(`CALL TABLE_INFO('${String(table.name)}') RETURN *;`)
-      .then((res) => res.getAll())
+    for (const table of tables) {
+      const tableInfoResult = await connection.query(`CALL TABLE_INFO('${String(table.name)}') RETURN *;`)
+      const tableInfo = await tableInfoResult.getAll()
+      tableInfoResult.close()
 
-    const properties = tableInfo.map((property) => ({
-      name: property.name as string,
-      type: property.type as string,
-      isPrimaryKey: property["primary key"] as boolean,
-    }))
-
-    if (table.type === TABLE_TYPES.NODE) {
-      const nodeTable: NodeTable = {
-        name: table.name as string,
-        comment: table.comment as string,
-        properties,
-      }
-      nodeTables.push(nodeTable)
-    } else if (table.type === TABLE_TYPES.REL) {
-      const propertiesWithoutPrimaryKey = properties.map(({ name, type }) => ({
-        name,
-        type,
+      const properties = tableInfo.map((property) => ({
+        name: property.name as string,
+        type: property.type as string,
+        isPrimaryKey: property["primary key"] as boolean,
       }))
 
-      const connectivity = await connection
-        .query(`CALL SHOW_CONNECTION('${String(table.name)}') RETURN *;`)
-        .then((res) => res.getAll())
+      if (table.type === TABLE_TYPES.NODE) {
+        const nodeTable: NodeTable = {
+          name: table.name as string,
+          comment: table.comment as string,
+          properties,
+        }
+        nodeTables.push(nodeTable)
+      } else if (table.type === TABLE_TYPES.REL) {
+        const propertiesWithoutPrimaryKey = properties.map(({ name, type }) => ({
+          name,
+          type,
+        }))
 
-      const relTable: RelTable = {
-        name: table.name as string,
-        comment: table.comment as string,
-        properties: propertiesWithoutPrimaryKey,
-        connectivity: connectivity.map((c) => ({
-          src: c["source table name"] as string,
-          dst: c["destination table name"] as string,
-        })),
+        const connectivityResult = await connection.query(`CALL SHOW_CONNECTION('${String(table.name)}') RETURN *;`)
+        const connectivity = await connectivityResult.getAll()
+        connectivityResult.close()
+
+        const relTable: RelTable = {
+          name: table.name as string,
+          comment: table.comment as string,
+          properties: propertiesWithoutPrimaryKey,
+          connectivity: connectivity.map((c) => ({
+            src: c["source table name"] as string,
+            dst: c["destination table name"] as string,
+          })),
+        }
+        relTables.push(relTable)
       }
-      relTables.push(relTable)
     }
-  }
 
-  nodeTables.sort((a, b) => a.name.localeCompare(b.name))
-  relTables.sort((a, b) => a.name.localeCompare(b.name))
-  return { nodeTables, relTables }
+    nodeTables.sort((a, b) => a.name.localeCompare(b.name))
+    relTables.sort((a, b) => a.name.localeCompare(b.name))
+    return { nodeTables, relTables }
+  } catch (error) {
+    console.error("Error getting schema:", error)
+    throw new Error(`Failed to get schema: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 server.setRequestHandler(ListToolsRequestSchema, () => {
@@ -233,10 +238,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       throw error
     }
   } else if (request.params.name === "getSchema") {
-    const schema = await getSchema(conn)
-    return {
-      content: [{ type: "text", text: JSON.stringify(schema, null, 2) }],
-      isError: false,
+    try {
+      const schema = await getSchema(conn)
+      return {
+        content: [{ type: "text", text: JSON.stringify(schema, null, 2) }],
+        isError: false,
+      }
+    } catch (error) {
+      console.error("Error in getSchema tool:", error)
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting schema: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      }
     }
   }
   throw new Error(`Unknown tool: ${request.params.name}`)
