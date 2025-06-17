@@ -202,13 +202,13 @@ server.setRequestHandler(ListToolsRequestSchema, () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   console.error("Tool call received:", JSON.stringify(request.params, null, 2))
-  
+
   if (request.params.name === "query") {
     const args = request.params.arguments
     console.error("Query tool arguments:", JSON.stringify(args, null, 2))
     console.error("Arguments type:", typeof args)
     console.error("Arguments keys:", args ? Object.keys(args) : "null/undefined")
-    
+
     // Support both 'cypher' and 'query' parameter names
     const cypher = (args?.cypher || args?.query) as string
 
