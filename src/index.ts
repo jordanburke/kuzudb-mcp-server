@@ -185,7 +185,6 @@ server.setRequestHandler(ListToolsRequestSchema, () => {
               description: "The Cypher query to run",
             },
           },
-          required: ["cypher"],
         },
       },
       {
@@ -204,19 +203,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
   console.error("Tool call received:", JSON.stringify(request.params, null, 2))
 
   if (request.params.name === "query") {
-    const args = request.params.arguments
-    console.error("Query tool arguments:", JSON.stringify(args, null, 2))
-    console.error("Arguments type:", typeof args)
-    console.error("Arguments keys:", args ? Object.keys(args) : "null/undefined")
-
-    // Support both 'cypher' and 'query' parameter names
-    const cypher = (args?.cypher || args?.query) as string
-
-    // Debug logging to understand what's being passed
-    if (!cypher) {
-      console.error("Query tool called with arguments:", JSON.stringify(args))
-      throw new Error(`Missing required argument: cypher. Received: ${JSON.stringify(args)}`)
-    }
+    const cypher = request.params.arguments?.cypher as string
+    console.error("DEBUG: Query received with cypher:", cypher)
 
     try {
       // Check if query is a write operation in read-only mode
