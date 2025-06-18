@@ -70,7 +70,7 @@ pnpm run build
 node dist/index.js /path/to/database
 
 # Using environment variable
-export KUZU_DB_PATH=/path/to/database
+export KUZU_MCP_DATABASE_PATH=/path/to/database
 pnpm start
 
 # Read-only mode

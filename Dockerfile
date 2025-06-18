@@ -35,7 +35,7 @@ RUN pnpm install --frozen-lockfile --prod=false && \
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV KUZU_DB_PATH=/database
+ENV KUZU_MCP_DATABASE_PATH=/database
 
 # Run app
 ENTRYPOINT ["node", "dist/index.js"]

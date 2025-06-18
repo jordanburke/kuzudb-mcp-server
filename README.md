@@ -66,6 +66,25 @@ A Model Context Protocol server that provides access to Kuzu databases. This ser
   Change the `{Absolute Path to the Kuzu database}` to the actual path
 - Restart Claude Desktop
 
+### Using Environment Variables
+You can also specify the database path using the `KUZU_MCP_DATABASE_PATH` environment variable instead of passing it as an argument:
+
+```json
+{
+    "mcpServers": {
+        "kuzu": {
+            "command": "npx",
+            "args": ["kuzudb-mcp-server"],
+            "env": {
+                "KUZU_MCP_DATABASE_PATH": "{Absolute Path to the Kuzu database}"
+            }
+        }
+    }
+}
+```
+
+Alternatively, if you have `KUZU_MCP_DATABASE_PATH` set in your system environment, the server will automatically use it when no database path argument is provided.
+
 ### Read-Only Mode
 The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environment variable to `true`. In this mode, running any query that attempts to modify the database will result in an error. This flag can be set in the configuration file as follows:
 

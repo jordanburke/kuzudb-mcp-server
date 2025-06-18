@@ -92,6 +92,14 @@ export function parseArgs(args: string[]): CLIOptions {
     }
   }
 
+  // If no database path was provided via CLI args, check the environment variable
+  if (!options.databasePath && !options.help && !options.version && options.command !== "test") {
+    const envPath = process.env.KUZU_MCP_DATABASE_PATH
+    if (envPath) {
+      options.databasePath = envPath
+    }
+  }
+
   return options
 }
 
@@ -116,9 +124,16 @@ OPTIONS:
   --timeout <ms>          Query timeout in milliseconds
   --max-results <n>       Maximum result set size
 
+ENVIRONMENT VARIABLES:
+  KUZU_MCP_DATABASE_PATH  Database path (used if not provided as argument)
+  KUZU_READ_ONLY          Set to "true" for read-only mode
+
 EXAMPLES:
   # Start MCP server
   npx kuzudb-mcp-server ./my-database
+
+  # Using environment variable
+  KUZU_MCP_DATABASE_PATH=/path/to/db npx kuzudb-mcp-server
 
   # Inspect database
   npx kuzudb-mcp-server --inspect ./my-database
