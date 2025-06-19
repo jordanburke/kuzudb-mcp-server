@@ -312,6 +312,10 @@ export async function initDatabase(dbPath: string, template?: string): Promise<v
         await initFinancialTemplate(conn)
         break
       default:
+        // Create a minimal table to ensure the database is persisted to disk
+        await conn.query(`CREATE NODE TABLE _KuzuMCPInit(id INT64, PRIMARY KEY(id))`)
+        // Drop the table immediately - we just needed it to force database creation
+        await conn.query("DROP TABLE _KuzuMCPInit")
         console.log("Created empty database. Use --template to initialize with sample data.")
     }
 
