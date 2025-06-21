@@ -3,6 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { fileURLToPath } from "url"
+import * as os from "os"
 
 // Read version from package.json
 const __filename = fileURLToPath(import.meta.url)
@@ -19,6 +20,24 @@ interface CLIOptions {
   maxResults?: number
   help?: boolean
   version?: boolean
+}
+
+function expandPath(inputPath: string): string {
+  // Handle ~ expansion
+  if (inputPath.startsWith("~/")) {
+    return path.join(os.homedir(), inputPath.slice(2))
+  }
+
+  // Handle %USERPROFILE% or $HOME style variables
+  if (process.platform === "win32" && inputPath.includes("%USERPROFILE%")) {
+    return inputPath.replace("%USERPROFILE%", os.homedir())
+  }
+
+  if (inputPath.includes("$HOME")) {
+    return inputPath.replace("$HOME", os.homedir())
+  }
+
+  return inputPath
 }
 
 export function parseArgs(args: string[]): CLIOptions {
@@ -41,12 +60,12 @@ export function parseArgs(args: string[]): CLIOptions {
       case "--inspect":
       case "-i":
         options.command = "inspect"
-        options.databasePath = args[++i]
+        options.databasePath = args[++i] ? expandPath(args[i]!) : undefined
         break
 
       case "--init":
         options.command = "init"
-        options.databasePath = args[++i]
+        options.databasePath = args[++i] ? expandPath(args[i]!) : undefined
         break
 
       case "--template":
@@ -61,7 +80,7 @@ export function parseArgs(args: string[]): CLIOptions {
 
       case "--validate":
         options.command = "validate"
-        options.databasePath = args[++i]
+        options.databasePath = args[++i] ? expandPath(args[i]!) : undefined
         break
 
       case "--test":
@@ -87,7 +106,7 @@ export function parseArgs(args: string[]): CLIOptions {
 
       default:
         if (arg && !arg.startsWith("-") && !options.databasePath && !options.command) {
-          options.databasePath = arg
+          options.databasePath = expandPath(arg)
         }
     }
   }
@@ -96,7 +115,7 @@ export function parseArgs(args: string[]): CLIOptions {
   if (!options.databasePath && !options.help && !options.version && options.command !== "test") {
     const envPath = process.env.KUZU_MCP_DATABASE_PATH
     if (envPath) {
-      options.databasePath = envPath
+      options.databasePath = expandPath(envPath)
     }
   }
 
