@@ -199,3 +199,15 @@ database
 history.txt
 
 .idea
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.kuzu
+*.kz
+**/kuzudb/
+**/kuzu_db/
+**/kuzu-db/
+C:/
+C:\\
