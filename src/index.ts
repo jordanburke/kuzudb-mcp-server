@@ -12,7 +12,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import * as kuzu from "kuzu"
 import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js"
-import { executeBatchQuery, formatKuzuError } from "./query-helpers.js"
+import { executeBatchQuery, formatKuzuError, detectCompositePrimaryKey } from "./query-helpers.js"
 import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
@@ -287,6 +287,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     }
 
     try {
+      // Early detection of composite primary keys
+      if (detectCompositePrimaryKey(cypher)) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  error: "UNSUPPORTED_FEATURE",
+                  message: "Kuzu does not support composite primary keys. Please use a single-column primary key.",
+                  type: "unsupported_feature",
+                  suggestion: "Consider using a SERIAL primary key or concatenating columns into a single key.",
+                  example: "CREATE NODE TABLE Test(id SERIAL, col1 INT64, col2 INT64, PRIMARY KEY(id))",
+                  documentation: "https://kuzudb.com/docs/cypher/data-definition/create-table",
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        }
+      }
+
       // Check if query is a write operation in read-only mode
       const isReadOnly = process.env.KUZU_READ_ONLY === "true"
       const isWriteQuery = /^\s*(CREATE|MERGE|DELETE|SET|REMOVE|MATCH.*DELETE|MATCH.*SET)/i.test(cypher)
@@ -295,7 +319,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         throw new Error("Cannot execute write queries in read-only mode")
       }
 
-      const rows = await executeBatchQuery(conn, cypher)
+      const rows = (await executeBatchQuery(conn, cypher)) as Record<string, unknown>[]
 
       // Ensure consistent response format
       const responseData = rows.length === 0 ? [{ result: "Query executed successfully", rowsAffected: 0 }] : rows
@@ -311,7 +335,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
     } catch (error) {
       console.error("Query execution error:", error)
-      const formattedError = formatKuzuError(error)
+      const formattedError = formatKuzuError(error, cypher)
 
       return {
         content: [

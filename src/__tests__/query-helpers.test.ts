@@ -179,10 +179,10 @@ describe("Query Helpers", () => {
           close: vi.fn(),
         })
 
-      const result = await executeBatchQuery(
+      const result = (await executeBatchQuery(
         mockConnection,
         "CREATE (p:Person {name: 'Alice'}); CREATE (p:Person {name: 'Bob'})",
-      )
+      )) as Record<string, unknown>[]
 
       expect(result).toHaveLength(2)
       expect(result[0]).toMatchObject({
@@ -218,10 +218,10 @@ describe("Query Helpers", () => {
           close: vi.fn(),
         })
 
-      const result = await executeBatchQuery(
+      const result = (await executeBatchQuery(
         mockConnection,
         "CREATE (p:Person {id: 1}); CREATE (p:Person {id: 1}); CREATE (p:Person {id: 2})",
-      )
+      )) as Record<string, unknown>[]
 
       expect(result).toHaveLength(3)
       expect(result[0]).toMatchObject({
