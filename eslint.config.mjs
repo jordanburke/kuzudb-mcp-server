@@ -41,6 +41,12 @@ export default [
     },
   },
   {
+    files: ['**/__tests__/**/*.ts', '**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
+  {
     ignores: ['node_modules/', 'dist/', '*.js', '*.mjs', '*.cjs', 'tsup.config.ts', 'vitest.config.ts', 'scripts/'],
   },
 ];

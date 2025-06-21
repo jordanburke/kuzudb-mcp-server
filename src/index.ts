@@ -12,6 +12,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import * as kuzu from "kuzu"
 import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js"
+import { executeBatchQuery, formatKuzuError } from "./query-helpers.js"
 import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
@@ -294,21 +295,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         throw new Error("Cannot execute write queries in read-only mode")
       }
 
-      const queryResult = await conn.query(cypher)
-      const rows = await queryResult.getAll()
-      queryResult.close()
+      const rows = await executeBatchQuery(conn, cypher)
+
+      // Ensure consistent response format
+      const responseData = rows.length === 0 ? [{ result: "Query executed successfully", rowsAffected: 0 }] : rows
+
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(rows, bigIntReplacer, 2),
+            text: JSON.stringify(responseData, bigIntReplacer, 2),
           },
         ],
         isError: false,
       }
     } catch (error) {
       console.error("Query execution error:", error)
-      throw error
+      const formattedError = formatKuzuError(error)
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(formattedError, null, 2),
+          },
+        ],
+        isError: true,
+      }
     }
   } else if (request.params.name === "getSchema") {
     try {
@@ -319,11 +332,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
     } catch (error) {
       console.error("Error in getSchema tool:", error)
+      const formattedError = formatKuzuError(error)
       return {
         content: [
           {
             type: "text",
-            text: `Error getting schema: ${error instanceof Error ? error.message : String(error)}`,
+            text: JSON.stringify(formattedError, null, 2),
           },
         ],
         isError: true,
