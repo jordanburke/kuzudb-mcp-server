@@ -155,7 +155,9 @@ export async function executeBatchQuery(
           const statement = statements[i] || `Statement ${i + 1}`
           const isDDL = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(statement)
 
-          // Add timeout for getAll() to prevent hanging on certain DDL operations
+          // WORKAROUND for Kuzu bug: getAll() hangs on subsequent DDL results
+          // See KUZU_BUG_WORKAROUNDS.md for tracking and removal instructions
+          // TODO: Remove this workaround once Kuzu fixes the issue
           const rows = await Promise.race([
             result.getAll(),
             new Promise<Record<string, unknown>[]>((_, reject) =>

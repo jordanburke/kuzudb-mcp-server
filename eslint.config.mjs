@@ -49,6 +49,6 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/', 'dist/', '*.js', '*.mjs', '*.cjs', 'tsup.config.ts', 'vitest.config.ts', 'scripts/'],
+    ignores: ['node_modules/', 'dist/', '*.js', '*.mjs', '*.cjs', 'tsup.config.ts', 'vitest.config.ts', 'scripts/', 'kuzu-bug-report/'],
   },
 ];
