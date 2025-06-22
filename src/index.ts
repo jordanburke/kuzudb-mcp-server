@@ -17,6 +17,7 @@ import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
 import { LockManager, detectMutation, LockTimeoutError } from "./lock-manager.js"
+import { analyzeDDLBatch, createDDLBatchError } from "./ddl-batch-protection.js"
 
 interface TableInfo {
   name: string
@@ -350,6 +351,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
                 null,
                 2,
               ),
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      // WORKAROUND: Protect against DDL batch bug that causes unrecoverable crashes
+      // TODO: Remove this when Kuzu fixes the getAll() hanging issue on subsequent DDL results
+      // See: ddl-batch-bug-detection.test.ts for automatic detection when bug is fixed
+      const ddlAnalysis = analyzeDDLBatch(cypher)
+      if (ddlAnalysis.isDangerous) {
+        const ddlError = createDDLBatchError(ddlAnalysis)
+        console.error(`🚨 DDL BATCH PROTECTION: Blocked dangerous query with ${ddlAnalysis.ddlCount} DDL statements`)
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(ddlError, null, 2),
             },
           ],
           isError: true,

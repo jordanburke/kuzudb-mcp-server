@@ -1,6 +1,6 @@
 {
   "name": "kuzudb-mcp-server",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Kuzu MCP server implementation",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

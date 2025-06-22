@@ -2,7 +2,50 @@
 
 This file tracks temporary workarounds for known Kuzu bugs. Remove these workarounds once the bugs are fixed upstream.
 
-## 1. DDL getAll() Hang Bug
+## 1. DDL Batch Protection System (CRITICAL)
+
+**Issue**: https://github.com/kuzudb/kuzu/issues/[PENDING]  
+**Kuzu Version Affected**: 0.10.0+  
+**Status**: 🔴 Critical Active Workaround  
+**Added**: 2025-06-22  
+
+### Description
+Multiple DDL statements in batch queries cause unrecoverable native crashes. The `getAll()` method hangs indefinitely on the 2nd+ DDL results, causing the entire Node.js process to crash at the native level.
+
+### Protection Strategy
+**Pre-query validation** blocks dangerous DDL batches before execution to prevent unrecoverable crashes.
+
+### Workaround Locations
+- **Protection Module**: `src/ddl-batch-protection.ts` (entire file)
+- **Integration**: `src/index.ts:360-376`
+- **Detection Tests**: `src/__tests__/ddl-batch-bug-detection.test.ts`
+
+### Workaround Implementation
+```typescript
+// Pre-query validation in index.ts
+const ddlAnalysis = analyzeDDLBatch(cypher)
+if (ddlAnalysis.isDangerous) {
+  const ddlError = createDDLBatchError(ddlAnalysis)
+  return { /* Error response with splitting suggestions */ }
+}
+```
+
+### Automated Fix Detection
+- **CI Test**: `🚨 CRITICAL: Tests if DDL batch bug is FIXED` 
+- **Detection**: Test executes known problematic query with timeout
+- **Alert**: When test passes, displays celebration message in CI logs
+- **Action**: CI failure will alert when workaround can be removed
+
+### Removal Checklist ⚠️
+**When test passes, remove these files/code:**
+- [ ] Delete `src/ddl-batch-protection.ts` entirely
+- [ ] Remove validation from `src/index.ts:360-376`
+- [ ] Remove import in `src/index.ts:20`
+- [ ] Delete `src/__tests__/ddl-batch-bug-detection.test.ts`
+- [ ] Update CLAUDE.md to remove DDL batch protection docs
+- [ ] Mark this section as RESOLVED
+
+## 2. DDL getAll() Hang Bug (Backup Protection)
 
 **Issue**: https://github.com/kuzudb/kuzu/issues/[PENDING - Update with actual issue number]  
 **Kuzu Version Affected**: 0.10.0  
