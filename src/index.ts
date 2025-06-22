@@ -677,7 +677,7 @@ process.on("uncaughtException", (error) => {
   }
 
   // Attempt to reinitialize connections for next request
-  setTimeout(async () => {
+  setTimeout(() => {
     try {
       if (currentDatabasePath) {
         console.error("Attempting to reinitialize database connections...")
