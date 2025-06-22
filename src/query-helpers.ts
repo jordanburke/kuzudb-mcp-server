@@ -151,23 +151,56 @@ export async function executeBatchQuery(
         const result = queryResults[i]
         if (!result) continue
         try {
-          const rows = await result.getAll()
+          // Detect DDL statements (ALTER TABLE, CREATE TABLE, DROP TABLE, etc.)
+          const statement = statements[i] || `Statement ${i + 1}`
+          const isDDL = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(statement)
+
+          // Add timeout for getAll() to prevent hanging on certain DDL operations
+          const rows = await Promise.race([
+            result.getAll(),
+            new Promise<Record<string, unknown>[]>((_, reject) =>
+              setTimeout(() => reject(new Error("getAll timeout")), 5000),
+            ),
+          ]).catch((err) => {
+            console.error(`getAll failed for statement ${i + 1}:`, err instanceof Error ? err.message : String(err))
+            console.error(`Statement was: ${statement}`)
+            // For DDL statements that might not return results properly, return empty array
+            if (isDDL) {
+              console.error("Returning empty array for DDL statement due to getAll issue")
+              return []
+            }
+            throw err
+          })
+
           if (rows.length === 0) {
-            // For CREATE/UPDATE/DELETE statements with no results
+            // For DDL and other statements with no results
             allResults.push({
               statement: i + 1,
-              query: statements[i] || `Statement ${i + 1}`,
-              result: "Success",
+              query: statement,
+              result: isDDL ? "DDL statement executed successfully" : "Success",
               rowsAffected: 0,
+              type: isDDL ? "DDL" : "DML",
             })
           } else {
-            // For queries with actual results, include statement info
-            allResults.push(
-              ...rows.map((row) => ({
+            // For queries with actual results
+            // Check if it's a DDL result (like ALTER TABLE which returns a message)
+            if (isDDL && rows.length === 1 && typeof rows[0] === "object" && "result" in rows[0]) {
+              allResults.push({
                 statement: i + 1,
-                ...row,
-              })),
-            )
+                query: statement,
+                result: rows[0].result,
+                rowsAffected: 0,
+                type: "DDL",
+              })
+            } else {
+              // Regular query results
+              allResults.push(
+                ...rows.map((row) => ({
+                  statement: i + 1,
+                  ...row,
+                })),
+              )
+            }
           }
           result.close()
         } catch (err) {
@@ -178,7 +211,13 @@ export async function executeBatchQuery(
             console.error("Result object properties:", Object.getOwnPropertyNames(result))
             console.error("Result prototype methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(result)))
           }
-          result.close()
+
+          // Try to close the result even if there was an error
+          try {
+            result.close()
+          } catch (closeErr) {
+            console.error("Error closing result:", closeErr)
+          }
         }
       }
 
@@ -228,7 +267,10 @@ export async function executeBatchQuery(
 
     for (let i = 0; i < statements.length; i++) {
       try {
-        const result = await connection.query(statements[i]!)
+        const statement = statements[i]!
+        const isDDL = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(statement)
+
+        const result = await connection.query(statement)
         const rows = await result.getAll()
         result.close()
 
@@ -236,17 +278,29 @@ export async function executeBatchQuery(
         if (rows.length === 0) {
           allResults.push({
             statement: i + 1,
-            query: statements[i]!,
-            result: "Success",
+            query: statement,
+            result: isDDL ? "DDL statement executed successfully" : "Success",
             rowsAffected: 0,
+            type: isDDL ? "DDL" : "DML",
           })
         } else {
-          allResults.push(
-            ...rows.map((row: Record<string, unknown>) => ({
+          // Check if it's a DDL result
+          if (isDDL && rows.length === 1 && typeof rows[0] === "object" && "result" in rows[0]) {
+            allResults.push({
               statement: i + 1,
-              ...row,
-            })),
-          )
+              query: statement,
+              result: rows[0].result,
+              rowsAffected: 0,
+              type: "DDL",
+            })
+          } else {
+            allResults.push(
+              ...rows.map((row: Record<string, unknown>) => ({
+                statement: i + 1,
+                ...row,
+              })),
+            )
+          }
         }
       } catch (err) {
         const errorInfo = {

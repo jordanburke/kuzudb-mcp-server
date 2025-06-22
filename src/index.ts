@@ -152,6 +152,18 @@ process.on("SIGTERM", () => {
   process.exit(0)
 })
 
+// Handle uncaught exceptions to prevent server crashes
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error)
+  console.error("Stack:", error.stack)
+  // Don't exit - try to keep the server running
+})
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason)
+  // Don't exit - try to keep the server running
+})
+
 const getPrompt = (question: string, schema: Schema): string => {
   const prompt = `Task:Generate Kuzu Cypher statement to query a graph database.
 Instructions:

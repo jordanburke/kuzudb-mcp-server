@@ -151,12 +151,14 @@ describe("Query Helpers", () => {
           query: "CREATE (p:Person {name: 'Alice'})",
           result: "Success",
           rowsAffected: 0,
+          type: "DML",
         },
         {
           statement: 2,
           query: "CREATE (p:Person {name: 'Bob'})",
           result: "Success",
           rowsAffected: 0,
+          type: "DML",
         },
       ])
       expect(mockConnection.query).toHaveBeenCalledOnce()
@@ -190,12 +192,14 @@ describe("Query Helpers", () => {
         query: "CREATE (p:Person {name: 'Alice'})",
         result: "Success",
         rowsAffected: 0,
+        type: "DML",
       })
       expect(result[1]).toMatchObject({
         statement: 2,
         query: "CREATE (p:Person {name: 'Bob'})",
         result: "Success",
         rowsAffected: 0,
+        type: "DML",
       })
       expect(mockConnection.query).toHaveBeenCalledTimes(3)
 
@@ -227,6 +231,7 @@ describe("Query Helpers", () => {
       expect(result[0]).toMatchObject({
         statement: 1,
         result: "Success",
+        type: "DML",
       })
       expect(result[1]).toMatchObject({
         statement: 2,
@@ -235,6 +240,7 @@ describe("Query Helpers", () => {
       expect(result[2]).toMatchObject({
         statement: 3,
         result: "Success",
+        type: "DML",
       })
 
       consoleErrorSpy.mockRestore()
