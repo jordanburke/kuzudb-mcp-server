@@ -127,6 +127,66 @@ The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environm
 }
 ```
 
+### Multi-Agent Coordination (Experimental)
+
+The server supports multi-agent coordination to allow multiple AI agents (e.g., Claude Desktop and Claude Code) to share the same Kuzu database safely. This feature addresses Kuzu's single-writer limitation through transparent file-based locking.
+
+#### Enabling Multi-Agent Mode
+
+Set the following environment variables in your configuration:
+
+- `KUZU_MULTI_AGENT=true` - Enable multi-agent coordination
+- `KUZU_AGENT_ID=string` - Unique identifier for the agent (e.g., "claude-desktop", "claude-code")
+- `KUZU_LOCK_TIMEOUT=number` - Lock timeout in milliseconds (default: 10000)
+
+#### Claude Desktop Configuration
+```json
+{
+    "mcpServers": {
+        "kuzu": {
+            "command": "npx",
+            "args": ["kuzudb-mcp-server", "/path/to/database"],
+            "env": {
+                "KUZU_MULTI_AGENT": "true",
+                "KUZU_AGENT_ID": "claude-desktop"
+            }
+        }
+    }
+}
+```
+
+#### Claude Code Configuration
+```json
+{
+    "mcpServers": {
+        "kuzu": {
+            "command": "npx",
+            "args": ["kuzudb-mcp-server", "/path/to/database"],
+            "env": {
+                "KUZU_MULTI_AGENT": "true",
+                "KUZU_AGENT_ID": "claude-code"
+            }
+        }
+    }
+}
+```
+
+#### How It Works
+
+When multi-agent mode is enabled:
+- Read queries execute immediately without coordination
+- Write queries (CREATE, MERGE, SET, DELETE, etc.) acquire an exclusive lock
+- Locks are automatically released after query completion
+- Stale locks from crashed processes are detected and cleaned up
+- Lock conflicts result in clear error messages with retry suggestions
+
+#### Important Notes
+
+- This feature is experimental and designed for local development scenarios
+- Both agents must point to the same database path
+- The lock file (`.mcp_write_lock`) is created in the database directory
+- Lock timeout defaults to 10 seconds, which covers most operations
+
 ## Development
 
 To build from source:

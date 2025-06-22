@@ -16,6 +16,7 @@ import { executeBatchQuery, formatKuzuError, detectCompositePrimaryKey } from ".
 import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
+import { LockManager, detectMutation, LockTimeoutError } from "./lock-manager.js"
 
 interface TableInfo {
   name: string
@@ -141,6 +142,7 @@ const server = new Server(
 // Global variables for database connection
 let db: kuzu.Database
 let conn: kuzu.Connection
+let lockManager: LockManager | null = null
 
 process.on("SIGINT", () => {
   process.exit(0)
@@ -313,25 +315,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       // Check if query is a write operation in read-only mode
       const isReadOnly = process.env.KUZU_READ_ONLY === "true"
-      const isWriteQuery = /^\s*(CREATE|MERGE|DELETE|SET|REMOVE|MATCH.*DELETE|MATCH.*SET)/i.test(cypher)
+      const isWriteQuery = detectMutation(cypher)
 
       if (isReadOnly && isWriteQuery) {
         throw new Error("Cannot execute write queries in read-only mode")
       }
 
-      const rows = (await executeBatchQuery(conn, cypher)) as Record<string, unknown>[]
+      // Handle multi-agent coordination for write queries
+      let lock = null
+      if (isWriteQuery && lockManager) {
+        try {
+          lock = await lockManager.acquireWriteLock()
+        } catch (error) {
+          if (error instanceof LockTimeoutError) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(
+                    {
+                      error: "LOCK_TIMEOUT",
+                      message: error.message,
+                      type: "lock_timeout",
+                      suggestion:
+                        "Please try again in a few moments. Another agent is currently writing to the database.",
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+              isError: true,
+            }
+          }
+          throw error
+        }
+      }
 
-      // Ensure consistent response format
-      const responseData = rows.length === 0 ? [{ result: "Query executed successfully", rowsAffected: 0 }] : rows
+      try {
+        const rows = (await executeBatchQuery(conn, cypher)) as Record<string, unknown>[]
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(responseData, bigIntReplacer, 2),
-          },
-        ],
-        isError: false,
+        // Ensure consistent response format
+        const responseData = rows.length === 0 ? [{ result: "Query executed successfully", rowsAffected: 0 }] : rows
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(responseData, bigIntReplacer, 2),
+            },
+          ],
+          isError: false,
+        }
+      } finally {
+        if (lock && lockManager) {
+          await lockManager.releaseLock(lock)
+        }
       }
     } catch (error) {
       console.error("Query execution error:", error)
@@ -467,6 +506,15 @@ async function main(): Promise<void> {
   const isReadOnly = options.readonly || process.env.KUZU_READ_ONLY === "true"
   db = new kuzu.Database(options.databasePath, 0, true, isReadOnly)
   conn = new kuzu.Connection(db)
+
+  // Initialize lock manager if multi-agent mode is enabled
+  const multiAgentMode = process.env.KUZU_MULTI_AGENT === "true"
+  if (multiAgentMode) {
+    const agentId = process.env.KUZU_AGENT_ID || `unknown-${process.pid}`
+    const lockTimeout = process.env.KUZU_LOCK_TIMEOUT ? parseInt(process.env.KUZU_LOCK_TIMEOUT, 10) : 10000
+    lockManager = new LockManager(options.databasePath, agentId, lockTimeout)
+    console.error(`🔐 Multi-agent mode enabled for agent: ${agentId}`)
+  }
 
   const transport = new StdioServerTransport()
   await server.connect(transport)
