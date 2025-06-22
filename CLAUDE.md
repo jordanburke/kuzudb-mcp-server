@@ -32,6 +32,35 @@ This is a Model Context Protocol (MCP) server that enables Claude to interact wi
    - Uses detailed prompt engineering with Kuzu-specific Cypher rules
    - Includes comprehensive examples and edge case handling
 
+## Connection Recovery and Error Handling
+
+The server includes robust connection recovery features to handle database connection failures:
+
+### Recovery Behavior
+- **Retry Attempts**: Configurable via `KUZU_MAX_RETRIES` environment variable (default: 2)
+- **Exponential Backoff**: 1s, 2s, 4s delays (capped at 5s) between reconnection attempts
+- **Connection Health Checks**: Automatic validation before query execution
+- **Automatic Reconnection**: Creates new database connections when failures are detected
+
+### Environment Variables for Recovery
+```bash
+# Maximum retry attempts for connection errors (default: 2)
+export KUZU_MAX_RETRIES=3
+
+# Other existing variables
+export KUZU_READ_ONLY=true
+export KUZU_MULTI_AGENT=true
+export KUZU_AGENT_ID=agent-1
+export KUZU_LOCK_TIMEOUT=10000
+```
+
+### Error Types Handled
+- Connection errors (`Connection`, `Database`, `closed`)  
+- DDL timeout errors (`getAll timeout`)
+- Process-level exceptions (uncaught/unhandled)
+
+When all recovery attempts are exhausted, the LLM receives a clear `CONNECTION_RECOVERY_FAILED` error with retry count and suggested actions.
+
 ## Development Workflow
 
 ### Setup

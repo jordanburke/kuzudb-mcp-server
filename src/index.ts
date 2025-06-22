@@ -143,25 +143,56 @@ const server = new Server(
 let db: kuzu.Database
 let conn: kuzu.Connection
 let lockManager: LockManager | null = null
+let currentDatabasePath: string = ""
+let currentIsReadOnly: boolean = false
 
+// Helper to check if connection is still valid
+async function isConnectionValid(): Promise<boolean> {
+  if (!conn) return false
+  try {
+    // Try a simple query to test the connection
+    const result = await conn.query("RETURN 1 as test;")
+    const rows = await result.getAll()
+    result.close()
+    return rows.length === 1 && rows[0]?.test === 1
+  } catch (error) {
+    console.error("Connection validation failed:", error)
+    return false
+  }
+}
+
+// Helper to reconnect to the database
+async function reconnectDatabase(databasePath: string, isReadOnly: boolean): Promise<void> {
+  console.error("Attempting to reconnect to database...")
+  try {
+    // Note: Kuzu doesn't have close() methods on Connection/Database
+    // Simply discard old references and let GC handle cleanup
+    conn = null as unknown as kuzu.Connection
+    db = null as unknown as kuzu.Database
+
+    // Create new connections
+    db = new kuzu.Database(databasePath, 0, true, isReadOnly)
+    conn = new kuzu.Connection(db)
+
+    // Validate the new connection
+    if (await isConnectionValid()) {
+      console.error("Database reconnection successful")
+    } else {
+      throw new Error("Failed to validate reconnected database")
+    }
+  } catch (error) {
+    console.error("Failed to reconnect to database:", error)
+    throw error
+  }
+}
+
+// Early signal handlers (will be overridden later with better cleanup)
 process.on("SIGINT", () => {
   process.exit(0)
 })
 
 process.on("SIGTERM", () => {
   process.exit(0)
-})
-
-// Handle uncaught exceptions to prevent server crashes
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error)
-  console.error("Stack:", error.stack)
-  // Don't exit - try to keep the server running
-})
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason)
-  // Don't exit - try to keep the server running
 })
 
 const getPrompt = (question: string, schema: Schema): string => {
@@ -365,7 +396,88 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
 
       try {
-        const rows = (await executeBatchQuery(conn, cypher)) as Record<string, unknown>[]
+        // Enhanced error handling with configurable retry logic
+        const maxRetries = parseInt(process.env.KUZU_MAX_RETRIES || "2", 10)
+        let rows: Record<string, unknown>[] | undefined = undefined
+        let lastError: Error | null = null
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            // Check connection health before executing (except on first attempt if no prior errors)
+            if (attempt > 0 || lastError) {
+              console.error(`Attempt ${attempt + 1}/${maxRetries + 1}: Checking connection health...`)
+              if (!(await isConnectionValid())) {
+                console.error("Connection invalid, attempting to reconnect...")
+                await reconnectDatabase(currentDatabasePath, currentIsReadOnly)
+
+                // Wait with exponential backoff between reconnection attempts
+                if (attempt > 0) {
+                  const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+                  console.error(`Waiting ${backoffMs}ms before retry...`)
+                  await new Promise((resolve) => setTimeout(resolve, backoffMs))
+                }
+              }
+            }
+
+            rows = (await executeBatchQuery(conn, cypher)) as Record<string, unknown>[]
+
+            // Success! Break out of retry loop
+            if (attempt > 0) {
+              console.error(`Query succeeded on attempt ${attempt + 1}`)
+            }
+            break
+          } catch (execError) {
+            lastError = execError instanceof Error ? execError : new Error(String(execError))
+            console.error(`Attempt ${attempt + 1}/${maxRetries + 1} failed:`, lastError.message)
+
+            // Check if this is a connection-related error worth retrying
+            const isConnectionError =
+              lastError.message.includes("Connection") ||
+              lastError.message.includes("Database") ||
+              lastError.message.includes("closed") ||
+              lastError.message.includes("getAll timeout")
+
+            if (!isConnectionError || attempt >= maxRetries) {
+              // Either not a connection error, or we've exhausted retries
+              if (attempt >= maxRetries && isConnectionError) {
+                // Final connection failure - inform the LLM clearly
+                return {
+                  content: [
+                    {
+                      type: "text",
+                      text: JSON.stringify(
+                        {
+                          error: "CONNECTION_RECOVERY_FAILED",
+                          message: `Database connection could not be restored after ${maxRetries + 1} attempts. The MCP server may need to be restarted.`,
+                          type: "connection_failure",
+                          attempts: attempt + 1,
+                          maxRetries: maxRetries + 1,
+                          lastError: lastError.message,
+                          suggestion: "Please restart Claude Desktop or check the database server status.",
+                          recovery: "Connection recovery failed after multiple attempts",
+                        },
+                        null,
+                        2,
+                      ),
+                    },
+                  ],
+                  isError: true,
+                }
+              } else {
+                // Non-connection error, re-throw immediately
+                throw lastError
+              }
+            }
+
+            // Continue to next retry attempt for connection errors
+            console.error(`Will retry connection error (attempt ${attempt + 1}/${maxRetries + 1})`)
+          }
+        }
+
+        // Ensure we have rows (this should never happen if we reach here, but TypeScript needs the check)
+        if (!rows) {
+          throw new Error("Query execution failed - no rows returned")
+        }
 
         // Ensure consistent response format
         const responseData = rows.length === 0 ? [{ result: "Query executed successfully", rowsAffected: 0 }] : rows
@@ -381,7 +493,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }
       } finally {
         if (lock && lockManager) {
-          await lockManager.releaseLock(lock)
+          try {
+            await lockManager.releaseLock(lock)
+          } catch (releaseError) {
+            console.error("Error releasing lock:", releaseError)
+          }
         }
       }
     } catch (error) {
@@ -516,6 +632,8 @@ async function main(): Promise<void> {
 
   // Initialize database for MCP server
   const isReadOnly = options.readonly || process.env.KUZU_READ_ONLY === "true"
+  currentDatabasePath = options.databasePath
+  currentIsReadOnly = isReadOnly
   db = new kuzu.Database(options.databasePath, 0, true, isReadOnly)
   conn = new kuzu.Connection(db)
 
@@ -532,7 +650,42 @@ async function main(): Promise<void> {
   await server.connect(transport)
 }
 
+// Global error handlers to prevent server crashes
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error)
+  console.error("Stack:", error.stack)
+  // Note: Kuzu doesn't have close() methods, just discard references
+  if (conn) {
+    conn = null as unknown as kuzu.Connection
+  }
+  if (db) {
+    db = null as unknown as kuzu.Database
+  }
+  // Don't exit - try to keep the server running
+  console.error("Server continuing after uncaught exception...")
+})
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise)
+  console.error("Reason:", reason)
+  // Don't exit - try to keep the server running
+  console.error("Server continuing after unhandled rejection...")
+})
+
+// Handle SIGTERM and SIGINT gracefully
+process.on("SIGTERM", () => {
+  console.error("Received SIGTERM, shutting down gracefully...")
+  // Note: Kuzu doesn't have close() methods
+  process.exit(0)
+})
+
+process.on("SIGINT", () => {
+  console.error("Received SIGINT, shutting down gracefully...")
+  // Note: Kuzu doesn't have close() methods
+  process.exit(0)
+})
+
 main().catch((error) => {
-  console.error(error)
+  console.error("Fatal error in main:", error)
   process.exit(1)
 })

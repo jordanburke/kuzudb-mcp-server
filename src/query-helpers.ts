@@ -150,9 +150,11 @@ export async function executeBatchQuery(
       for (let i = 0; i < queryResults.length; i++) {
         const result = queryResults[i]
         if (!result) continue
+
+        // Detect DDL statements (ALTER TABLE, CREATE TABLE, DROP TABLE, etc.)
+        const statement = statements[i] || `Statement ${i + 1}`
+
         try {
-          // Detect DDL statements (ALTER TABLE, CREATE TABLE, DROP TABLE, etc.)
-          const statement = statements[i] || `Statement ${i + 1}`
           const isDDL = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(statement)
 
           // WORKAROUND for Kuzu bug: getAll() hangs on subsequent DDL results
@@ -170,6 +172,11 @@ export async function executeBatchQuery(
             if (isDDL) {
               console.error("Returning empty array for DDL statement due to getAll issue")
               return []
+            }
+            // For non-DDL statements, check if it's a critical error
+            if (err instanceof Error && err.message.includes("Connection")) {
+              console.error("Critical connection error detected")
+              throw new Error(`Database connection lost during query execution. Please restart the MCP server.`)
             }
             throw err
           })
@@ -220,6 +227,13 @@ export async function executeBatchQuery(
           } catch (closeErr) {
             console.error("Error closing result:", closeErr)
           }
+          // Don't let individual statement errors crash the whole batch
+          allResults.push({
+            statement: i + 1,
+            query: statement,
+            error: err instanceof Error ? err.message : String(err),
+            type: "ERROR",
+          })
         }
       }
 

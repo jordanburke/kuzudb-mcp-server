@@ -226,3 +226,24 @@ For local development, you can also configure Claude Desktop to use the local bu
     }
 }
 ```
+
+## Documentation
+
+### Core Features
+- **[Connection Recovery](./docs/connection-recovery.md)** - Automatic connection recovery, retry logic, and error handling
+- **[Multi-Agent Coordination](./docs/Multi-Agent%20Coordination%20Design%20for%20kuzudb-mcp-server.md)** - Safe concurrent access with file-based locking
+- **[Batch Query Improvements](./docs/batch-query-improvements.md)** - Enhanced DDL and multi-statement query handling
+
+### Bug Workarounds
+- **[Kuzu Bug Workarounds](./kuzu-bug-report/KUZU_BUG_WORKAROUNDS.md)** - Temporary fixes for known Kuzu issues
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `KUZU_READ_ONLY` | Enable read-only mode | `false` |
+| `KUZU_MAX_RETRIES` | Connection recovery retry attempts | `2` |
+| `KUZU_MULTI_AGENT` | Enable multi-agent coordination | `false` |
+| `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` |
+| `KUZU_LOCK_TIMEOUT` | Lock acquisition timeout (ms) | `10000` |
+| `KUZU_MCP_DATABASE_PATH` | Database path if not provided as argument | - |
