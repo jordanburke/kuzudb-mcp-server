@@ -647,29 +647,75 @@ async function main(): Promise<void> {
   }
 
   const transport = new StdioServerTransport()
-  await server.connect(transport)
+
+  // Add additional error handling for the transport connection
+  try {
+    await server.connect(transport)
+    console.error("✓ MCP server connected successfully")
+  } catch (error) {
+    console.error("❌ Failed to connect MCP server:", error)
+    // Don't exit, try to continue - this helps with debugging
+    throw error
+  }
 }
 
-// Global error handlers to prevent server crashes
+// Enhanced global error handlers to prevent server crashes
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error)
+  console.error("🚨 UNCAUGHT EXCEPTION - Attempting recovery...")
+  console.error("Error:", error)
   console.error("Stack:", error.stack)
-  // Note: Kuzu doesn't have close() methods, just discard references
+  console.error("Error type:", error.constructor.name)
+
+  // Discard potentially corrupted connection references
   if (conn) {
+    console.error("Discarding database connection reference")
     conn = null as unknown as kuzu.Connection
   }
   if (db) {
+    console.error("Discarding database instance reference")
     db = null as unknown as kuzu.Database
   }
+
+  // Attempt to reinitialize connections for next request
+  setTimeout(async () => {
+    try {
+      if (currentDatabasePath) {
+        console.error("Attempting to reinitialize database connections...")
+        db = new kuzu.Database(currentDatabasePath, 0, true, currentIsReadOnly)
+        conn = new kuzu.Connection(db)
+        console.error("✓ Database connections reinitialized after uncaught exception")
+      }
+    } catch (reinitError) {
+      console.error("❌ Failed to reinitialize database connections:", reinitError)
+    }
+  }, 1000)
+
   // Don't exit - try to keep the server running
-  console.error("Server continuing after uncaught exception...")
+  console.error("🔄 Server continuing after uncaught exception (connections may be reset)...")
 })
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise)
+  console.error("🚨 UNHANDLED PROMISE REJECTION - Attempting recovery...")
+  console.error("Promise:", promise)
   console.error("Reason:", reason)
+
+  // Check if it's a database-related rejection
+  if (
+    reason instanceof Error &&
+    (reason.message.includes("Database") || reason.message.includes("Connection") || reason.message.includes("kuzu"))
+  ) {
+    console.error("Database-related promise rejection detected - flagging connections for reset")
+    // Flag connections as potentially invalid for next health check
+    if (conn) {
+      conn = null as unknown as kuzu.Connection
+    }
+    if (db) {
+      db = null as unknown as kuzu.Database
+    }
+  }
+
   // Don't exit - try to keep the server running
-  console.error("Server continuing after unhandled rejection...")
+  console.error("🔄 Server continuing after unhandled rejection...")
 })
 
 // Handle SIGTERM and SIGINT gracefully
