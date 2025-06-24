@@ -18,6 +18,7 @@ import * as path from "path"
 import * as fs from "fs"
 import { LockManager, detectMutation, LockTimeoutError } from "./lock-manager.js"
 import { analyzeDDLBatch, createDDLBatchError } from "./ddl-batch-protection.js"
+import { validateMergeQuery, clearSchemaCache } from "./merge-validation.js"
 
 interface TableInfo {
   name: string
@@ -357,6 +358,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }
       }
 
+      // Validate MERGE operations to prevent crashes from undefined properties
+      if (cypher.toUpperCase().includes("MERGE")) {
+        console.error("🔍 Validating MERGE query...")
+        const mergeValidation = await validateMergeQuery(conn, cypher)
+
+        if (!mergeValidation.isValid) {
+          console.error(`🚨 MERGE VALIDATION: Query contains undefined properties`)
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    error: "MERGE_VALIDATION_ERROR",
+                    message: "MERGE query validation failed due to undefined properties",
+                    type: "schema_validation_error",
+                    errors: mergeValidation.errors,
+                    warnings: mergeValidation.warnings,
+                    suggestion: mergeValidation.suggestedFix,
+                    documentation: "https://kuzudb.com/docs/cypher/data-definition/create-table",
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+            isError: true,
+          }
+        }
+
+        // Show warnings even if valid
+        if (mergeValidation.warnings.length > 0) {
+          console.error("⚠️  MERGE warnings:", mergeValidation.warnings.join("; "))
+        }
+      }
+
       // WORKAROUND: Protect against DDL batch bug that causes unrecoverable crashes
       // TODO: Remove this when Kuzu fixes the getAll() hanging issue on subsequent DDL results
       // See: ddl-batch-bug-detection.test.ts for automatic detection when bug is fixed
@@ -496,6 +533,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         // Ensure we have rows (this should never happen if we reach here, but TypeScript needs the check)
         if (!rows) {
           throw new Error("Query execution failed - no rows returned")
+        }
+
+        // Clear schema cache after DDL operations
+        const isDDLQuery = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(cypher)
+        if (isDDLQuery) {
+          console.error("🔄 Clearing schema cache after DDL operation")
+          clearSchemaCache()
         }
 
         // Ensure consistent response format

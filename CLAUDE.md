@@ -125,7 +125,11 @@ When working with Cypher queries in this codebase, these Kuzu-specific differenc
 3. **No WHERE on CREATE** - Use separate MATCH/WHERE then CREATE
 4. **Primary keys required** - All node tables need PRIMARY KEY defined
 5. **SERIAL for auto-increment** - Use SERIAL data type, not AUTO_INCREMENT
-6. **No MERGE** - Use MATCH then CREATE, or CREATE OR REPLACE
+6. **Limited MERGE support** - MERGE works but with strict requirements:
+   - All properties in MERGE must be predefined in the table schema
+   - Properties not in schema will cause server crashes
+   - Server validates MERGE queries to prevent crashes
+   - Consider using CREATE OR REPLACE for updates instead
 7. **CREATE OR REPLACE** - Kuzu-specific for upsert operations
 8. **No variable-length paths in CREATE** - Only in MATCH clauses
 9. **LIST() not COLLECT()** - Use LIST() for aggregation
@@ -136,6 +140,32 @@ When working with Cypher queries in this codebase, these Kuzu-specific differenc
 14. **Table names are case-sensitive**
 15. **CALL for CSV with headers** - Use `CALL ... IN TRANSACTIONS`
 16. **No property existence check** - Use `CASE WHEN` for conditionals
+
+### MERGE Query Validation
+
+The server includes automatic MERGE query validation to prevent crashes:
+- Validates all properties exist in the table schema before execution
+- Provides clear error messages listing undefined properties
+- Suggests alternative patterns (CREATE OR REPLACE, MATCH/CREATE)
+- Caches schema information for performance (5-minute TTL)
+- Clears cache after DDL operations automatically
+
+Example of a problematic MERGE that will be caught:
+```cypher
+// This will fail validation if 'salary' is not in Person table schema
+MERGE (p:Person {name: 'John'})
+SET p.salary = 100000
+```
+
+Suggested alternatives:
+```cypher
+// Option 1: Use CREATE OR REPLACE
+CREATE OR REPLACE (p:Person {name: 'John', salary: 100000})
+
+// Option 2: Use MATCH then CREATE
+MATCH (p:Person {name: 'John'})
+SET p.salary = 100000
+```
 
 ## Code Standards
 
