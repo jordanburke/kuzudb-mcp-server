@@ -17,7 +17,6 @@ import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
 import { LockManager, detectMutation, LockTimeoutError } from "./lock-manager.js"
-import { analyzeDDLBatch, createDDLBatchError } from "./ddl-batch-protection.js"
 import { validateMergeQuery, clearSchemaCache } from "./merge-validation.js"
 
 interface TableInfo {
@@ -400,24 +399,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         // Show warnings even if valid
         if (mergeValidation.warnings.length > 0) {
           console.error("⚠️  MERGE warnings:", mergeValidation.warnings.join("; "))
-        }
-      }
-
-      // WORKAROUND: Protect against DDL batch bug that causes unrecoverable crashes
-      // TODO: Remove this when Kuzu fixes the getAll() hanging issue on subsequent DDL results
-      // See: ddl-batch-bug-detection.test.ts for automatic detection when bug is fixed
-      const ddlAnalysis = analyzeDDLBatch(cypher)
-      if (ddlAnalysis.isDangerous) {
-        const ddlError = createDDLBatchError(ddlAnalysis)
-        console.error(`🚨 DDL BATCH PROTECTION: Blocked dangerous query with ${ddlAnalysis.ddlCount} DDL statements`)
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(ddlError, null, 2),
-            },
-          ],
-          isError: true,
         }
       }
 
