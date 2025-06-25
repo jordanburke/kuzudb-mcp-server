@@ -236,14 +236,14 @@ const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
   try {
     const result = await connection.query("CALL show_tables() RETURN *;")
     const tables = await result.getAll()
-    result.close()
     const nodeTables: NodeTable[] = []
     const relTables: RelTable[] = []
+    const resultsToClose: kuzu.QueryResult[] = [result]
 
     for (const table of tables) {
       const tableInfoResult = await connection.query(`CALL TABLE_INFO('${String(table.name)}') RETURN *;`)
       const tableInfo = await tableInfoResult.getAll()
-      tableInfoResult.close()
+      resultsToClose.push(tableInfoResult)
 
       const properties = tableInfo.map((property) => ({
         name: property.name as string,
@@ -266,7 +266,7 @@ const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
 
         const connectivityResult = await connection.query(`CALL SHOW_CONNECTION('${String(table.name)}') RETURN *;`)
         const connectivity = await connectivityResult.getAll()
-        connectivityResult.close()
+        resultsToClose.push(connectivityResult)
 
         const relTable: RelTable = {
           name: table.name as string,
@@ -278,6 +278,15 @@ const getSchema = async (connection: kuzu.Connection): Promise<Schema> => {
           })),
         }
         relTables.push(relTable)
+      }
+    }
+
+    // Close all results after consuming everything
+    for (const res of resultsToClose) {
+      try {
+        res.close()
+      } catch (closeErr) {
+        console.error("Error closing result:", closeErr)
       }
     }
 

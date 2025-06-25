@@ -88,9 +88,13 @@ export async function processQueryResults(
   // Check if the result is an array (multiple query results)
   if (Array.isArray(queryResult)) {
     const allResults: Record<string, unknown>[] = []
+    const resultsToClose: kuzu.QueryResult[] = []
+
+    // First, collect all results without closing any
     for (let i = 0; i < queryResult.length; i++) {
       const result = queryResult[i]
       if (!result) continue
+      resultsToClose.push(result)
       try {
         const rows = await result.getAll()
         // For CREATE statements, rows will be empty
@@ -105,12 +109,20 @@ export async function processQueryResults(
           // For queries with actual results, include the data
           allResults.push(...rows)
         }
-        result.close()
       } catch (err) {
         console.error("Error processing individual query result:", err)
-        result.close()
       }
     }
+
+    // Now close all results after consuming everything
+    for (const result of resultsToClose) {
+      try {
+        result.close()
+      } catch (closeErr) {
+        console.error("Error closing result:", closeErr)
+      }
+    }
+
     return allResults
   } else {
     // Single query result
@@ -147,9 +159,13 @@ export async function executeBatchQuery(
 
       const allResults: Record<string, unknown>[] = []
       const queryResults = queryResult as kuzu.QueryResult[]
+      const resultsToClose: kuzu.QueryResult[] = []
+
+      // First, collect all results without closing any
       for (let i = 0; i < queryResults.length; i++) {
         const result = queryResults[i]
         if (!result) continue
+        resultsToClose.push(result)
 
         // Detect DDL statements (ALTER TABLE, CREATE TABLE, DROP TABLE, etc.)
         const statement = statements[i] || `Statement ${i + 1}`
@@ -211,7 +227,6 @@ export async function executeBatchQuery(
               )
             }
           }
-          result.close()
         } catch (err) {
           console.error("Error processing individual query result:", err)
           // Log more details about the error for debugging
@@ -221,12 +236,6 @@ export async function executeBatchQuery(
             console.error("Result prototype methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(result)))
           }
 
-          // Try to close the result even if there was an error
-          try {
-            result.close()
-          } catch (closeErr) {
-            console.error("Error closing result:", closeErr)
-          }
           // Don't let individual statement errors crash the whole batch
           allResults.push({
             statement: i + 1,
@@ -234,6 +243,15 @@ export async function executeBatchQuery(
             error: err instanceof Error ? err.message : String(err),
             type: "ERROR",
           })
+        }
+      }
+
+      // Now close all results after consuming everything
+      for (const result of resultsToClose) {
+        try {
+          result.close()
+        } catch (closeErr) {
+          console.error("Error closing result:", closeErr)
         }
       }
 
