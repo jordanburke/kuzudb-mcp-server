@@ -173,29 +173,8 @@ export async function executeBatchQuery(
         try {
           const isDDL = /^\s*(CREATE|ALTER|DROP)\s+(TABLE|NODE|REL|RELATIONSHIP)/i.test(statement)
 
-          // WORKAROUND for Kuzu bug: getAll() hangs on subsequent DDL results
-          // See KUZU_BUG_WORKAROUNDS.md for tracking and removal instructions
-          // TODO: Remove this workaround once Kuzu fixes the issue
-          const rows = await Promise.race([
-            result.getAll(),
-            new Promise<Record<string, unknown>[]>((_, reject) =>
-              setTimeout(() => reject(new Error("getAll timeout")), 5000),
-            ),
-          ]).catch((err) => {
-            console.error(`getAll failed for statement ${i + 1}:`, err instanceof Error ? err.message : String(err))
-            console.error(`Statement was: ${statement}`)
-            // For DDL statements that might not return results properly, return empty array
-            if (isDDL) {
-              console.error("Returning empty array for DDL statement due to getAll issue")
-              return []
-            }
-            // For non-DDL statements, check if it's a critical error
-            if (err instanceof Error && err.message.includes("Connection")) {
-              console.error("Critical connection error detected")
-              throw new Error(`Database connection lost during query execution. Please restart the MCP server.`)
-            }
-            throw err
-          })
+          // Now that we fixed the result closing issue, we can directly call getAll()
+          const rows = await result.getAll()
 
           if (rows.length === 0) {
             // For DDL and other statements with no results

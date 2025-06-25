@@ -2,11 +2,21 @@
 
 This file tracks temporary workarounds for known Kuzu bugs. Remove these workarounds once the bugs are fixed upstream.
 
+## UPDATE 2025-06-25: DDL Batch Bug Root Cause Fixed
+
+The root cause of the DDL batch bug has been identified and fixed. The issue was that query results in multi-statement queries are stored in a linked-list structure, and closing the first result was causing all subsequent results to be closed. The fix involves consuming all results before closing any of them.
+
+**Fix implemented in:**
+- `src/query-helpers.ts`: processQueryResults and executeBatchQuery functions
+- `src/index.ts`: getSchema function
+
+The DDL timeout workaround has been removed as it's no longer needed.
+
 ## 1. DDL Batch Protection System (CRITICAL)
 
 **Issue**: https://github.com/kuzudb/kuzu/issues/[PENDING]  
 **Kuzu Version Affected**: 0.10.0+  
-**Status**: 🔴 Critical Active Workaround  
+**Status**: ✅ RESOLVED - Root cause fixed 2025-06-25  
 **Added**: 2025-06-22  
 
 ### Description
@@ -49,7 +59,7 @@ if (ddlAnalysis.isDangerous) {
 
 **Issue**: https://github.com/kuzudb/kuzu/issues/[PENDING - Update with actual issue number]  
 **Kuzu Version Affected**: 0.10.0  
-**Status**: 🔴 Active Workaround  
+**Status**: ✅ RESOLVED - Root cause fixed 2025-06-25  
 **Added**: 2024-06-22  
 
 ### Description
