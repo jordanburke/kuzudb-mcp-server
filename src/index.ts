@@ -68,7 +68,7 @@ async function ensureKuzuInstalled(): Promise<void> {
     // since we're running in Node.js environment with CommonJS interop
     const createRequire = (await import("module")).createRequire
     const require = createRequire(import.meta.url)
-    kuzuPath = path.dirname(require.resolve("kuzu/package.json"))
+    kuzuPath = path.dirname(require.resolve("kuzu"))
     console.error(`🔍 Found kuzu at: ${kuzuPath}`)
   } catch (error) {
     console.error("❌ Kuzu module not found. Please ensure kuzu is installed.")

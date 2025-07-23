@@ -12,8 +12,8 @@ importers:
         specifier: ^1.16.0
         version: 1.16.0
       kuzu:
-        specifier: 0.10.0
-        version: 0.10.0
+        specifier: 0.11.0
+        version: 0.11.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.31.0
@@ -1208,8 +1208,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  kuzu@0.10.0:
-    resolution: {integrity: sha512-CjM1brQx56lFEfTSIjQwYVmJ7ZLj4RRqAyHRt284NRi2KJ191XGTFRBZ+OO2yjOBXpEsRLfkfm0LspEM6lP6rg==}
+  kuzu@0.11.0:
+    resolution: {integrity: sha512-yubqo+c6CeWGV34xJcucTMV7NlpqNA+52WGlVxfDFLE4TT1Jq8HkiMK7I8/+3eZTOfO68k6JmhnJvIRJKdetZg==}
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -3080,7 +3080,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  kuzu@0.10.0:
+  kuzu@0.11.0:
     dependencies:
       cmake-js: 7.3.1
       node-addon-api: 6.1.0
