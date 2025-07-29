@@ -27,8 +27,8 @@ RUN chown -R node:node /database
 USER node
 
 # Install dependencies and build
-# Note: --ignore-scripts=false ensures post-install scripts run
-RUN pnpm install --frozen-lockfile --prod=false --ignore-scripts=false && \
+RUN pnpm install --frozen-lockfile --prod=false && \
+    cd node_modules/.pnpm/kuzu@0.11.1/node_modules/kuzu && node install.js && cd /home/node/app && \
     pnpm run build && \
     rm -rf src tsconfig.json tsup.config.ts
 
