@@ -162,6 +162,6 @@ export async function startFastMCPServer(options: FastMCPServerOptions): Promise
     },
   })
 
-  console.error(`✓ FastMCP server running on http://localhost:${options.port || 3000}${options.endpoint || "/mcp"}`)
+  console.error(`✓ FastMCP server running on http://0.0.0.0:${options.port || 3000}${options.endpoint || "/mcp"}`)
   console.error("🔌 Connect with StreamableHTTPClientTransport")
 }
