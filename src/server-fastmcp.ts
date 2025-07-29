@@ -20,6 +20,19 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
   const server = new FastMCP({
     name: "kuzu",
     version: "0.1.0",
+    health: {
+      enabled: true,
+      path: "/health",
+      status: 200,
+      message: JSON.stringify({
+        status: "healthy",
+        service: "kuzudb-mcp-server",
+        version: "0.11.10",
+        database: options.databasePath,
+        readonly: options.isReadOnly,
+        timestamp: new Date().toISOString(),
+      }),
+    },
   })
 
   // Add query tool
