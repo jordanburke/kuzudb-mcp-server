@@ -20,6 +20,9 @@ interface CLIOptions {
   maxResults?: number
   help?: boolean
   version?: boolean
+  transport?: "stdio" | "http"
+  port?: number
+  endpoint?: string
 }
 
 function expandPath(inputPath: string): string {
@@ -98,6 +101,41 @@ export function parseArgs(args: string[]): CLIOptions {
         }
         break
 
+      case "--transport":
+        if (i + 1 < args.length && args[i + 1] && !args[i + 1]!.startsWith("-")) {
+          const transport = args[++i]
+          if (transport === "stdio" || transport === "http") {
+            options.transport = transport
+          } else {
+            console.error("Error: --transport must be either 'stdio' or 'http'")
+            process.exit(1)
+          }
+        } else {
+          console.error("Error: --transport requires a value (stdio or http)")
+          process.exit(1)
+        }
+        break
+
+      case "--port":
+        if (i + 1 < args.length && args[i + 1]) {
+          const port = parseInt(args[++i]!, 10)
+          if (isNaN(port) || port < 1 || port > 65535) {
+            console.error("Error: --port must be a valid port number (1-65535)")
+            process.exit(1)
+          }
+          options.port = port
+        }
+        break
+
+      case "--endpoint":
+        if (i + 1 < args.length && args[i + 1] && !args[i + 1]!.startsWith("-")) {
+          options.endpoint = args[++i]
+        } else {
+          console.error("Error: --endpoint requires a value")
+          process.exit(1)
+        }
+        break
+
       case "--max-results":
         if (i + 1 < args.length && args[i + 1]) {
           options.maxResults = parseInt(args[++i]!, 10)
@@ -142,6 +180,9 @@ OPTIONS:
   --readonly              Start in read-only mode
   --timeout <ms>          Query timeout in milliseconds
   --max-results <n>       Maximum result set size
+  --transport <type>      Transport type: stdio (default) or http
+  --port <n>              HTTP server port (default: 3000)
+  --endpoint <path>       HTTP endpoint path (default: /mcp)
 
 ENVIRONMENT VARIABLES:
   KUZU_MCP_DATABASE_PATH  Database path (used if not provided as argument)
@@ -165,6 +206,12 @@ EXAMPLES:
 
   # Read-only mode with options
   npx kuzudb-mcp-server ./prod-db --readonly --timeout 30000
+
+  # Start HTTP server
+  npx kuzudb-mcp-server ./my-database --transport http --port 3000
+
+  # Custom HTTP endpoint
+  npx kuzudb-mcp-server ./my-database --transport http --endpoint /kuzu
 `)
 }
 

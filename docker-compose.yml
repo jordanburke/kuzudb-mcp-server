@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  kuzu-mcp-http:
+    build:
+      context: .
+      dockerfile: Dockerfile.http
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount your database directory here
+      - ./data:/database
+    environment:
+      - KUZU_MCP_DATABASE_PATH=/database
+      - KUZU_READ_ONLY=false
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/mcp').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Example with custom port and endpoint
+  kuzu-mcp-custom:
+    build:
+      context: .
+      dockerfile: Dockerfile.http
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/database
+    environment:
+      - KUZU_MCP_DATABASE_PATH=/database
+      - KUZU_READ_ONLY=true
+      - PORT=8080
+    command: ["node", "dist/index.js", "--transport", "http", "--port", "8080", "--endpoint", "/kuzu"]
+    restart: unless-stopped
+    profiles:
+      - custom

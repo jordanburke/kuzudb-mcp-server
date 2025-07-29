@@ -2,6 +2,30 @@
 
 A Model Context Protocol server that provides access to Kuzu databases. This server enables LLMs to inspect database schemas and execute queries on provided kuzu database.
 
+## Quick Start
+
+For quick testing and development:
+
+```bash
+# Install the package
+npm install -g kuzudb-mcp-server
+# or use pnpm/yarn
+
+# Clone the repository for development
+git clone https://github.com/jordanburke/kuzudb-mcp-server.git
+cd kuzudb-mcp-server
+pnpm install
+
+# Quick test with auto-created database
+pnpm serve:test              # stdio transport (default)
+pnpm serve:test:http         # HTTP transport
+pnpm serve:test:inspect      # HTTP with MCP Inspector
+
+# Initialize databases manually
+pnpm db:init                 # Create empty test database
+pnpm db:init:movies          # Create database with movie data
+```
+
 ## Components
 ### Tools 
 - getSchema
@@ -125,6 +149,107 @@ The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environm
         }
     }
 }
+```
+
+## Remote Connection (HTTP Transport)
+
+The server supports both stdio (default) and HTTP transports, allowing remote connections and easier debugging.
+
+### Docker Deployment (HTTP Server)
+
+The easiest way to run the HTTP server is using Docker. Pre-built images are available from GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/jordanburke/kuzudb-mcp-server:latest
+
+# Run with mounted database
+docker run -d \
+  -p 3000:3000 \
+  -v /path/to/your/database:/database \
+  -e KUZU_READ_ONLY=false \
+  ghcr.io/jordanburke/kuzudb-mcp-server:latest
+
+# Run with custom port and endpoint
+docker run -d \
+  -p 8080:8080 \
+  -v /path/to/your/database:/database \
+  -e PORT=8080 \
+  ghcr.io/jordanburke/kuzudb-mcp-server:latest \
+  node dist/index.js --transport http --port 8080 --endpoint /kuzu
+```
+
+#### Build Locally
+
+```bash
+# Build and run with docker-compose
+docker-compose up -d
+
+# Or build manually
+docker build -f Dockerfile.http -t kuzu-mcp-http .
+
+# Run your local build
+docker run -d \
+  -p 3000:3000 \
+  -v /path/to/your/database:/database \
+  kuzu-mcp-http
+```
+
+The HTTP server will be available at `http://localhost:3000/mcp` (or your custom endpoint).
+
+### HTTP Server Mode
+
+To run the server in HTTP mode:
+
+```bash
+# Command line
+node dist/index.js /path/to/database --transport http --port 3000
+
+# Using npm scripts (with test database)
+pnpm serve:test:http
+```
+
+### Testing with MCP Inspector
+
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a web-based tool for testing and debugging MCP servers.
+
+```bash
+# Start server with inspector (automatically opens browser)
+pnpm serve:test:inspect
+
+# Or manually:
+# 1. Start HTTP server
+node dist/index.js /path/to/database --transport http
+
+# 2. Open inspector
+npx @modelcontextprotocol/inspector http://localhost:3000/mcp
+```
+
+### Remote Client Configuration
+
+For applications supporting HTTP MCP connections:
+
+```json
+{
+  "mcpServers": {
+    "kuzu-remote": {
+      "uri": "http://localhost:3000/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+### HTTP Server Options
+
+- `--transport http` - Enable HTTP transport (default: stdio)
+- `--port <number>` - HTTP server port (default: 3000)
+- `--endpoint <path>` - Custom endpoint path (default: /mcp)
+
+Example with custom options:
+```bash
+node dist/index.js /path/to/database --transport http --port 8080 --endpoint /kuzu
+# Server will be available at http://localhost:8080/kuzu
 ```
 
 ### Multi-Agent Coordination (Experimental)

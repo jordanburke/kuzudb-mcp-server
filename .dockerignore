@@ -1,0 +1,53 @@
+# Node modules
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+
+# Test files
+test/
+*.test.ts
+*.spec.ts
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+kuzu-bug-report/
+
+# Development files
+.eslintrc.*
+.prettierrc
+vitest.config.ts
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+
+# Docker files
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Temporary files
+*.log
+*.tmp
+.cache/
+
+# Database files (should be mounted as volumes)
+*.db
+*.wal
+test-db*
+data/
