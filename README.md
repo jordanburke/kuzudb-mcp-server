@@ -90,6 +90,23 @@ pnpm db:init:movies          # Create database with movie data
   Change the `{Absolute Path to the Kuzu database}` to the actual path
 - Restart Claude Desktop
 
+### With Smithery
+
+This server is available on [Smithery](https://smithery.ai) for easy installation:
+
+```bash
+# Install via Smithery CLI
+smithery install kuzudb-mcp-server
+
+# The server auto-initializes with a sample movies database
+# No manual database setup required!
+```
+
+The Smithery version includes:
+- Automatic database initialization with movies template
+- No volume mounting required
+- Ready-to-use graph database for testing and exploration
+
 ### Using Environment Variables
 You can also specify the database path using the `KUZU_MCP_DATABASE_PATH` environment variable instead of passing it as an argument:
 

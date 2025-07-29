@@ -1,0 +1,60 @@
+FROM node:22-alpine
+
+# Install pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY tsconfig.json tsup.config.ts ./
+
+# Copy source files
+COPY src ./src
+
+# Install dependencies and build
+RUN pnpm install --frozen-lockfile --prod=false && \
+    pnpm run build && \
+    pnpm prune --prod && \
+    rm -rf src tsconfig.json tsup.config.ts
+
+# Create database directory
+RUN mkdir -p /app/database
+
+# Environment variables for auto-init
+ENV NODE_ENV=production
+ENV KUZU_MCP_DATABASE_PATH=/app/database
+ENV KUZU_AUTO_INIT=true
+ENV KUZU_INIT_TEMPLATE=movies
+
+# Create an entrypoint script for auto-initialization
+RUN cat > /app/entrypoint.sh << 'EOF'
+#!/bin/sh
+set -e
+
+# Check if we should auto-initialize
+if [ "$KUZU_AUTO_INIT" = "true" ] && [ ! -d "$KUZU_MCP_DATABASE_PATH" -o -z "$(ls -A $KUZU_MCP_DATABASE_PATH 2>/dev/null)" ]; then
+    echo "🚀 Auto-initializing Kuzu database..."
+    if [ -n "$KUZU_INIT_TEMPLATE" ]; then
+        echo "📦 Using template: $KUZU_INIT_TEMPLATE"
+        node dist/index.js --init "$KUZU_MCP_DATABASE_PATH" --template "$KUZU_INIT_TEMPLATE"
+    else
+        echo "📦 Creating empty database"
+        node dist/index.js --init "$KUZU_MCP_DATABASE_PATH"
+    fi
+    echo "✅ Database initialized successfully!"
+else
+    echo "✓ Database already exists or auto-init disabled"
+fi
+
+# Start the MCP server in stdio mode (Smithery requirement)
+exec node dist/index.js "$KUZU_MCP_DATABASE_PATH"
+EOF
+
+RUN chmod +x /app/entrypoint.sh
+
+# Smithery uses stdio, not HTTP
+ENTRYPOINT ["/app/entrypoint.sh"]

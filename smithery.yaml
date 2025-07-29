@@ -1,0 +1,28 @@
+name: kuzudb-mcp-server
+description: MCP server for Kuzu graph database - query and explore graph data with Cypher
+vendor: jordanburke
+
+mcp:
+  version: 1.0.0
+
+build:
+  dockerfile: Dockerfile.smithery
+
+runtime:
+  environment:
+    KUZU_MCP_DATABASE_PATH: /app/database
+    KUZU_AUTO_INIT: "true"
+    KUZU_INIT_TEMPLATE: "movies"
+
+instructions: |
+  This MCP server provides access to Kuzu graph databases through Cypher queries.
+  
+  The server initializes with a sample movies database automatically. You can:
+  - Query the database using the 'query' tool with Cypher syntax
+  - Get the database schema using the 'getSchema' tool
+  - Generate Kuzu-specific Cypher queries using the 'generateKuzuCypher' prompt
+  
+  Example queries:
+  - "MATCH (p:Person) RETURN p.name LIMIT 5"
+  - "MATCH (m:Movie) WHERE m.released > 1990 RETURN m.title, m.released"
+  - "MATCH (p:Person)-[:ACTED_IN]->(m:Movie) RETURN p.name, m.title LIMIT 10"

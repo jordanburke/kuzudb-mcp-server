@@ -15,6 +15,7 @@ import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, in
 import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
+import { promises as fsPromises } from "fs"
 import { DatabaseManager, executeQuery, getSchema, getPrompt, initializeDatabaseManager } from "./server-core.js"
 import { startFastMCPServer } from "./server-fastmcp.js"
 
@@ -150,9 +151,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
   if (request.params.name === "query") {
     const cypher = request.params.arguments?.cypher as string
-    const result = await executeQuery(cypher, dbManager)
     // The SDK expects the result directly without wrapping
-    return result
+    return await executeQuery(cypher, dbManager)
   } else if (request.params.name === "getSchema") {
     try {
       const schema = await getSchema(dbManager.conn)
@@ -290,19 +290,48 @@ async function main(): Promise<void> {
 
   // Default: Start MCP server
   if (!options.databasePath) {
-    console.error("Error: No database path provided.\n")
-    console.error("Usage:")
-    console.error("  node dist/index.js <database-path> [options]\n")
-    console.error("Quick start:")
-    console.error("  pnpm serve:test              # Create/use test database (stdio)")
-    console.error("  pnpm serve:test:http         # Create/use test database (HTTP)")
-    console.error("  pnpm serve:test:inspect      # Test with MCP Inspector\n")
-    console.error("Options:")
-    console.error("  --transport <stdio|http>     Transport type (default: stdio)")
-    console.error("  --port <number>             Port for HTTP server (default: 3000)")
-    console.error("  --readonly                  Enable read-only mode\n")
-    console.error("For full help: node dist/index.js --help")
-    process.exit(1)
+    // Check if auto-init is enabled (for Smithery or containerized environments)
+    if (process.env.KUZU_AUTO_INIT === "true" && process.env.KUZU_MCP_DATABASE_PATH) {
+      console.log("🚀 Auto-initialization enabled, checking database...")
+      const autoDbPath = process.env.KUZU_MCP_DATABASE_PATH
+
+      try {
+        // Check if database exists
+        const dbExists = await fsPromises
+          .access(autoDbPath)
+          .then(() => true)
+          .catch(() => false)
+        const isEmpty = dbExists ? (await fsPromises.readdir(autoDbPath)).length === 0 : true
+
+        if (!dbExists || isEmpty) {
+          console.log("📦 Auto-initializing database...")
+          const template = process.env.KUZU_INIT_TEMPLATE || undefined
+          await initDatabase(autoDbPath, template)
+          console.log("✅ Database auto-initialized successfully!")
+        } else {
+          console.log("✓ Database already exists")
+        }
+
+        options.databasePath = autoDbPath
+      } catch (error) {
+        console.error("❌ Auto-initialization failed:", error)
+        process.exit(1)
+      }
+    } else {
+      console.error("Error: No database path provided.\n")
+      console.error("Usage:")
+      console.error("  node dist/index.js <database-path> [options]\n")
+      console.error("Quick start:")
+      console.error("  pnpm serve:test              # Create/use test database (stdio)")
+      console.error("  pnpm serve:test:http         # Create/use test database (HTTP)")
+      console.error("  pnpm serve:test:inspect      # Test with MCP Inspector\n")
+      console.error("Options:")
+      console.error("  --transport <stdio|http>     Transport type (default: stdio)")
+      console.error("  --port <number>             Port for HTTP server (default: 3000)")
+      console.error("  --readonly                  Enable read-only mode\n")
+      console.error("For full help: node dist/index.js --help")
+      process.exit(1)
+    }
   }
 
   // Apply options from CLI
