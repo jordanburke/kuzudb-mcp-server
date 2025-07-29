@@ -2,17 +2,34 @@ name: kuzudb-mcp-server
 description: MCP server for Kuzu graph database - query and explore graph data with Cypher
 vendor: jordanburke
 
-mcp:
-  version: 1.0.0
+runtime: container
 
 build:
   dockerfile: Dockerfile.smithery
 
-runtime:
-  environment:
-    KUZU_MCP_DATABASE_PATH: /app/database
-    KUZU_AUTO_INIT: "true"
-    KUZU_INIT_TEMPLATE: "movies"
+env:
+  KUZU_MCP_DATABASE_PATH: /app/database
+  KUZU_AUTO_INIT: "true"
+  KUZU_INIT_TEMPLATE: "movies"
+  PORT: "3000"
+
+startCommand:
+  type: http
+  configSchema:
+    type: object
+    properties:
+      readOnly:
+        type: boolean
+        description: Enable read-only mode
+        default: false
+      template:
+        type: string
+        description: Database template to use for initialization
+        default: movies
+        enum: ["movies", "social", "financial"]
+  exampleConfig:
+    readOnly: false
+    template: movies
 
 instructions: |
   This MCP server provides access to Kuzu graph databases through Cypher queries.

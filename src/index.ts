@@ -143,7 +143,7 @@ server.setRequestHandler(ListToolsRequestSchema, () => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<any> => {
-  console.error("Tool call received:", JSON.stringify(request.params, null, 2))
+  // console.error("Tool call received:", JSON.stringify(request.params, null, 2))
 
   if (!dbManager) {
     throw new Error("Database manager not initialized")
