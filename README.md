@@ -182,8 +182,13 @@ docker run -d \
 #### Build Locally
 
 ```bash
-# Build and run with docker-compose
+# Build and run with docker-compose (auto-initializes database if needed)
 docker-compose up -d
+
+# The init container will:
+# - Check if ./data directory contains a database
+# - Initialize with movies template if empty
+# - Skip initialization if database exists
 
 # Or build manually
 docker build -f Dockerfile.http -t kuzu-mcp-http .
@@ -193,6 +198,9 @@ docker run -d \
   -p 3000:3000 \
   -v /path/to/your/database:/database \
   kuzu-mcp-http
+
+# To use a different template or empty database, run init manually first:
+docker-compose run kuzu-init node dist/index.js --init /database --template social
 ```
 
 The HTTP server will be available at `http://localhost:3000/mcp` (or your custom endpoint).
