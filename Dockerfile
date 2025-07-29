@@ -29,7 +29,6 @@ USER node
 # Install dependencies and build
 RUN pnpm install --frozen-lockfile --prod=false && \
     pnpm run build && \
-    pnpm prune --prod && \
     rm -rf src tsconfig.json tsup.config.ts
 
 # Set environment variables
