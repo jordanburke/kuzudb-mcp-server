@@ -27,7 +27,8 @@ RUN chown -R node:node /database
 USER node
 
 # Install dependencies and build
-RUN pnpm install --frozen-lockfile --prod=false && \
+# Note: --ignore-scripts=false ensures post-install scripts run
+RUN pnpm install --frozen-lockfile --prod=false --ignore-scripts=false && \
     pnpm run build && \
     rm -rf src tsconfig.json tsup.config.ts
 
