@@ -30,8 +30,7 @@ USER node
 RUN pnpm install --frozen-lockfile --prod=false && \
     pnpm run build && \
     pnpm prune --prod && \
-    rm -rf src tsconfig.json tsup.config.ts && \
-    rm -rf node_modules/kuzu/prebuilt node_modules/kuzu/kuzu-source
+    rm -rf src tsconfig.json tsup.config.ts
 
 # Set environment variables
 ENV NODE_ENV=production

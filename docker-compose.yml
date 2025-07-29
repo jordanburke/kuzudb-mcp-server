@@ -3,11 +3,9 @@ version: '3.8'
 services:
   # Initialize database if it doesn't exist
   kuzu-init:
-    build:
-      context: .
-      dockerfile: Dockerfile.http
+    image: ghcr.io/jordanburke/kuzudb-mcp-server:latest
     volumes:
-      - ./data:/database
+      - kuzu-data:/database
     environment:
       - KUZU_MCP_DATABASE_PATH=/database
     command: |
@@ -22,14 +20,11 @@ services:
       "
 
   kuzu-mcp-http:
-    build:
-      context: .
-      dockerfile: Dockerfile.http
+    image: ghcr.io/jordanburke/kuzudb-mcp-server:latest
     ports:
       - "3000:3000"
     volumes:
-      # Mount your database directory here
-      - ./data:/database
+      - kuzu-data:/database
     environment:
       - KUZU_MCP_DATABASE_PATH=/database
       - KUZU_READ_ONLY=false
@@ -45,3 +40,6 @@ services:
     depends_on:
       kuzu-init:
         condition: service_completed_successfully
+
+volumes:
+  kuzu-data:
