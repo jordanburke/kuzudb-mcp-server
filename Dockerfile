@@ -40,4 +40,4 @@ ENV KUZU_MCP_DATABASE_PATH=/database
 EXPOSE 3000
 
 # Run app in HTTP mode by default
-ENTRYPOINT ["node", "dist/index.js", "--transport", "http"]
+ENTRYPOINT ["sh", "-c", "node dist/index.js --transport http --port ${PORT:-3000}"]
