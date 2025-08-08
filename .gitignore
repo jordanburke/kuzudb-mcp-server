@@ -209,6 +209,10 @@ history.txt
 **/kuzudb/
 **/kuzu_db/
 **/kuzu-db/
-test/test-db/
+test/
+server.log
+test-*.db
+test-*.wal
+*.kuzu
 C:/
 C:\\

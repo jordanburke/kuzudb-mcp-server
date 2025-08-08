@@ -377,6 +377,109 @@ For local development, you can also configure Claude Desktop to use the local bu
 }
 ```
 
+## Web UI for Database Management
+
+The server includes a web-based interface for managing your Kuzu database, automatically enabled when running in HTTP transport mode.
+
+### Features
+
+- **Database Backup & Restore**: Download and upload database backups through your browser
+- **Direct Database Upload**: Upload existing Kuzu database files (main + .wal files) directly
+- **Visual Database Info**: View database path, mode, and connection status
+- **Secure Access**: Optional authentication to protect your database
+- **Read-Only Mode Support**: Upload/restore features automatically disabled in read-only mode
+
+### Using the Web UI
+
+The Web UI is **automatically enabled** when running with HTTP transport.
+
+#### Quick Start
+
+```bash
+# Web UI auto-starts on port 3001
+pnpm serve:test:http
+
+# Access the web UI
+open http://localhost:3001/admin
+```
+
+#### With Docker Compose
+
+```bash
+# Start with web UI on port 3001
+docker-compose up -d
+
+# Access the web UI
+open http://localhost:3001/admin
+```
+
+#### Disabling the Web UI
+
+To disable the web UI (e.g., for production security):
+
+```bash
+# Explicitly disable web UI
+KUZU_WEB_UI_ENABLED=false \
+node dist/index.js test/test-db --transport http
+```
+
+#### With Authentication
+
+```bash
+# Add authentication for security
+KUZU_WEB_UI_AUTH_USER=admin \
+KUZU_WEB_UI_AUTH_PASSWORD=changeme \
+node dist/index.js test/test-db --transport http
+```
+
+#### With Docker
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -p 3001:3001 \
+  -v /path/to/database:/database \
+  -e KUZU_WEB_UI_ENABLED=true \
+  -e KUZU_WEB_UI_PORT=3001 \
+  -e KUZU_WEB_UI_AUTH_USER=admin \
+  -e KUZU_WEB_UI_AUTH_PASSWORD=changeme \
+  ghcr.io/jordanburke/kuzudb-mcp-server:latest
+```
+
+### Web UI Endpoints
+
+- `/admin` - Main web interface
+- `/health` - Health check endpoint
+- `/api/info` - Database information (JSON)
+- `/api/backup` - Download database backup
+- `/api/restore` - Upload and restore database (supports both backups and raw files)
+
+### Uploading Existing Databases
+
+The Web UI supports two methods for uploading databases:
+
+#### Method 1: Upload Backup File
+Upload a `.kuzu` backup file created by the download feature.
+
+#### Method 2: Upload Raw Database Files
+Upload your existing Kuzu database files directly:
+1. Click "Upload" in the web interface
+2. Select **both** files:
+   - Your main database file (e.g., `memory`, `mydb.db`, etc.)
+   - The WAL file if it exists (e.g., `memory.wal`)
+3. The server will restore these files directly
+
+Example: For a database at `C:\Users\you\OneDrive\Apps\kuzudb\memory`:
+- Upload: `memory` (main file) + `memory.wal` (WAL file)
+- The server replaces its current database with your files
+
+### Security Notes
+
+- Web UI is **automatically enabled** with HTTP transport (disable with `KUZU_WEB_UI_ENABLED=false`)
+- Only available when running with HTTP transport (not with stdio)
+- Authentication is strongly recommended for production use
+- CORS headers allow cross-origin requests (configure as needed)
+
 ## Documentation
 
 ### Core Features
@@ -397,3 +500,7 @@ For local development, you can also configure Claude Desktop to use the local bu
 | `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` |
 | `KUZU_LOCK_TIMEOUT` | Lock acquisition timeout (ms) | `10000` |
 | `KUZU_MCP_DATABASE_PATH` | Database path if not provided as argument | - |
+| `KUZU_WEB_UI_ENABLED` | Enable/disable web UI (HTTP mode only) | `true` (auto-enabled with HTTP) |
+| `KUZU_WEB_UI_PORT` | Port for web UI server | `3001` |
+| `KUZU_WEB_UI_AUTH_USER` | Username for web UI authentication | - |
+| `KUZU_WEB_UI_AUTH_PASSWORD` | Password for web UI authentication | - |

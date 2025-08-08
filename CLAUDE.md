@@ -4,240 +4,224 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that enables Claude to interact with Kuzu graph databases. The server provides tools for executing Cypher queries and retrieving database schemas, along with prompts for generating Kuzu-specific Cypher queries.
+kuzudb-mcp-server is a Model Context Protocol (MCP) server that enables AI agents to interact with Kuzu graph databases. It provides tools for executing Cypher queries, retrieving schemas, and generating Kuzu-specific Cypher queries through both stdio and HTTP transports.
+
+## Development Commands
+
+### Building and Running
+```bash
+# Install dependencies
+pnpm install
+
+# Build the project
+pnpm build
+
+# Development mode with watch
+pnpm dev
+
+# Quick test with auto-created database
+pnpm serve:test              # stdio transport (default)
+pnpm serve:test:http         # HTTP transport
+pnpm serve:test:inspect      # HTTP with MCP Inspector
+
+# Initialize databases manually
+pnpm db:init                 # Create empty test database
+pnpm db:init:movies          # Create database with movie data
+
+# Type checking and linting
+pnpm typecheck
+pnpm lint
+pnpm lint:fix
+pnpm format
+pnpm format:check
+```
+
+### Testing
+```bash
+# Run all tests
+pnpm test
+
+# Run tests with UI
+pnpm test:ui
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run a single test file
+pnpm test src/__tests__/query-helpers.test.ts
+
+# Run tests matching a pattern
+pnpm test -- -t "MERGE validation"
+
+# Clean test databases
+pnpm clean:test-dbs
+```
+
+### Docker Operations
+```bash
+# Build Docker image
+docker build -t kuzu-mcp .
+
+# Build HTTP-specific image
+docker build -f Dockerfile.http -t kuzu-mcp-http .
+
+# Run with docker-compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f kuzu-mcp-http
+
+# Check health status
+docker-compose ps
+```
 
 ## Architecture
 
-### Core Components
+### Core Module Structure
 
-- **MCP Server** (`src/index.ts`): TypeScript implementation using `@modelcontextprotocol/sdk`
-- **Database Connection**: Uses the `kuzu` NPM package to connect to local Kuzu databases
-- **Transport**: Communicates via stdio with Claude Desktop
-- **Build System**: Uses tsup for building TypeScript to JavaScript
+The codebase is organized into distinct modules with clear responsibilities:
 
-### Tools Provided
+1. **Entry Points**
+   - `src/index.ts` - Main CLI entry point, handles command parsing and transport selection
+   - `src/server-fastmcp.ts` - FastMCP HTTP server implementation
+   - `src/server-core.ts` - Core database operations and connection management
 
-1. **query**: Execute Cypher queries on the database
-   - Input: `query` (string) - The Cypher query to execute
-   - Returns: Query results as JSON objects
-   - Respects read-only mode when `KUZU_READ_ONLY=true`
+2. **Connection & Recovery Layer** (`src/server-core.ts`)
+   - Manages Kuzu database connections with automatic reconnection
+   - Implements exponential backoff retry logic (1s, 2s, 4s delays)
+   - Handles connection health monitoring and validation
+   - Process-level error recovery (uncaught exceptions, unhandled rejections)
 
-2. **getSchema**: Retrieve database schema
-   - No inputs required
-   - Returns: Lists of node and relationship schemas with properties
+3. **Query Processing Layer**
+   - `src/query-helpers.ts` - Batch query execution, error formatting, DDL detection
+   - `src/merge-validation.ts` - MERGE query validation to prevent schema crashes
+   - Schema caching with 5-minute TTL for performance
 
-### Prompts Provided
+4. **Multi-Agent Coordination** (`src/lock-manager.ts`)
+   - File-based locking for write operations
+   - Automatic lock cleanup for stale processes
+   - Read queries execute without locking
 
-1. **generateKuzuCypher**: Generate Kuzu-specific Cypher queries from natural language
-   - Uses detailed prompt engineering with Kuzu-specific Cypher rules
-   - Includes comprehensive examples and edge case handling
+5. **CLI Layer** (`src/cli.ts`)
+   - Database initialization with templates (movies, social, financial)
+   - Path validation and inspection
+   - Help and version display
 
-## Connection Recovery and Error Handling
+### Transport Architecture
 
-The server includes robust connection recovery features to handle database connection failures:
+The server supports two transport modes with shared core logic:
 
-### Recovery Behavior
-- **Retry Attempts**: Configurable via `KUZU_MAX_RETRIES` environment variable (default: 2)
-- **Exponential Backoff**: 1s, 2s, 4s delays (capped at 5s) between reconnection attempts
-- **Connection Health Checks**: Automatic validation before query execution
-- **Automatic Reconnection**: Creates new database connections when failures are detected
-
-### Environment Variables for Recovery
-```bash
-# Maximum retry attempts for connection errors (default: 2)
-export KUZU_MAX_RETRIES=3
-
-# Other existing variables
-export KUZU_READ_ONLY=true
-export KUZU_MULTI_AGENT=true
-export KUZU_AGENT_ID=agent-1
-export KUZU_LOCK_TIMEOUT=10000
+```
+┌─────────────┐     ┌──────────────┐
+│ stdio Mode  │     │  HTTP Mode   │
+│ (index.ts)  │     │(FastMCP/3000)│
+└──────┬──────┘     └──────┬───────┘
+       │                   │
+       └───────┬───────────┘
+               │
+       ┌───────▼────────┐
+       │  server-core   │
+       │ - executeQuery │
+       │ - getSchema    │
+       │ - reconnect    │
+       └───────┬────────┘
+               │
+       ┌───────▼────────┐
+       │ Kuzu Database  │
+       └────────────────┘
 ```
 
-### Error Types Handled
-- Connection errors (`Connection`, `Database`, `closed`)  
-- DDL timeout errors (`getAll timeout`)
-- Process-level exceptions (uncaught/unhandled)
+### Error Recovery Flow
 
-When all recovery attempts are exhausted, the LLM receives a clear `CONNECTION_RECOVERY_FAILED` error with retry count and suggested actions.
+Connection failures trigger automatic recovery without requiring server restart:
 
-## Development Workflow
-
-### Setup
-```bash
-pnpm install
+```
+Query Request → Check Connection Health
+                      ↓ (if invalid)
+                 Discard Old Connection
+                      ↓
+                 Create New Connection
+                      ↓
+                 Validate Connection
+                      ↓
+                 Retry Query (with backoff)
+                      ↓
+                 Return Results or Recovery Failed Error
 ```
 
-### Build
-```bash
-pnpm run build
-```
-
-### Development
-```bash
-# Watch mode for development
-pnpm run dev
-
-# Type checking
-pnpm run typecheck
-
-# Linting
-pnpm run lint
-pnpm run lint:fix
-
-# Formatting
-pnpm run format
-pnpm run format:check
-```
-
-### Running the Server
-```bash
-# Build first
-pnpm run build
-
-# With database path as argument
-node dist/index.js /path/to/database
-
-# Using environment variable
-export KUZU_MCP_DATABASE_PATH=/path/to/database
-pnpm start
-
-# Read-only mode
-export KUZU_READ_ONLY=true
-node dist/index.js /path/to/database
-```
-
-### Docker Usage
-```bash
-# Build
-docker build -t kuzu-mcp .
-
-# Run with mounted database
-docker run -v /path/to/database:/database kuzu-mcp
-```
-
-## Important Kuzu-Specific Cypher Rules
-
-When working with Cypher queries in this codebase, these Kuzu-specific differences from Neo4j must be followed:
-
-1. **No CREATE INDEX** - Kuzu doesn't support index creation via Cypher
-2. **LOAD FROM** instead of LOAD CSV - Use `LOAD FROM '/path/file.csv' ...`
-3. **No WHERE on CREATE** - Use separate MATCH/WHERE then CREATE
-4. **Primary keys required** - All node tables need PRIMARY KEY defined
-5. **SERIAL for auto-increment** - Use SERIAL data type, not AUTO_INCREMENT
-6. **Limited MERGE support** - MERGE works but with strict requirements:
-   - All properties in MERGE must be predefined in the table schema
-   - Properties not in schema will cause server crashes
-   - Server validates MERGE queries to prevent crashes
-   - Consider using CREATE OR REPLACE for updates instead
-7. **CREATE OR REPLACE** - Kuzu-specific for upsert operations
-8. **No variable-length paths in CREATE** - Only in MATCH clauses
-9. **LIST() not COLLECT()** - Use LIST() for aggregation
-10. **RETURN * includes internal IDs** - May include _id and _label
-11. **Copy FROM for bulk load** - Use `COPY User FROM '/path/users.csv'`
-12. **Header in CSV required** - CSV files must have headers matching properties
-13. **No SET on non-existent properties** - Property must be in table schema
-14. **Table names are case-sensitive**
-15. **CALL for CSV with headers** - Use `CALL ... IN TRANSACTIONS`
-16. **No property existence check** - Use `CASE WHEN` for conditionals
+## Important Kuzu-Specific Behaviors
 
 ### MERGE Query Validation
+The server validates MERGE queries before execution to prevent Kuzu crashes:
+- Checks all properties exist in table schema
+- Caches schema for 5 minutes
+- Clears cache after DDL operations
+- Suggests CREATE OR REPLACE as alternative
 
-The server includes automatic MERGE query validation to prevent crashes:
-- Validates all properties exist in the table schema before execution
-- Provides clear error messages listing undefined properties
-- Suggests alternative patterns (CREATE OR REPLACE, MATCH/CREATE)
-- Caches schema information for performance (5-minute TTL)
-- Clears cache after DDL operations automatically
-
-Example of a problematic MERGE that will be caught:
-```cypher
-// This will fail validation if 'salary' is not in Person table schema
-MERGE (p:Person {name: 'John'})
-SET p.salary = 100000
+### DDL Timeout Workaround
+Kuzu has a bug where `getAll()` hangs on DDL operations. The server implements a 5-second timeout:
+```typescript
+const rows = await Promise.race([
+  result.getAll(),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error("getAll timeout")), 5000)
+  )
+])
 ```
 
-Suggested alternatives:
-```cypher
-// Option 1: Use CREATE OR REPLACE
-CREATE OR REPLACE (p:Person {name: 'John', salary: 100000})
-
-// Option 2: Use MATCH then CREATE
-MATCH (p:Person {name: 'John'})
-SET p.salary = 100000
+### BigInt Serialization
+Kuzu returns BigInt values that aren't JSON-serializable. All responses use a custom replacer:
+```typescript
+JSON.stringify(data, bigIntReplacer)
 ```
 
-## Code Standards
+### Multi-Agent Lock Files
+When `KUZU_MULTI_AGENT=true`, lock files are created in the database directory:
+- `.mcp_write_lock` - Contains agent ID and timestamp
+- Automatic cleanup after 30 seconds (stale lock detection)
 
-### TypeScript
-- Strict mode enabled in `tsconfig.json`
-- No use of `any` type - use `unknown` or proper type definitions
-- Explicit return types for functions
-- Proper type guards for narrowing union types
+## Environment Variables
 
-### Error Handling
-- Always wrap database operations in try-catch blocks
-- Use descriptive error messages that indicate the operation that failed
-- Include query details in error responses for debugging
+| Variable | Description | Default | Impact |
+|----------|-------------|---------|---------|
+| `KUZU_MCP_DATABASE_PATH` | Database path if not provided as argument | - | Server startup |
+| `KUZU_READ_ONLY` | Enable read-only mode | `false` | Query validation |
+| `KUZU_MAX_RETRIES` | Connection recovery retry attempts | `2` | Error recovery |
+| `KUZU_MULTI_AGENT` | Enable multi-agent coordination | `false` | Write locking |
+| `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` | Lock ownership |
+| `KUZU_LOCK_TIMEOUT` | Lock acquisition timeout (ms) | `10000` | Write operations |
 
-### BigInt Handling
-- The codebase includes a custom JSON serializer for BigInt values:
-  ```typescript
-  const bigIntReplacer = (_: string, value: unknown): unknown => {
-    if (typeof value === "bigint") {
-      return value.toString();
-    }
-    return value;
-  };
-  ```
+## Common Issues and Solutions
 
-### Connection Management
-- Database connection is established once at server startup
-- Connection errors result in server exit with error code 1
-- Always check connection status before operations
+### Connection Issues
+- **"Database connection could not be restored"** - Check database file exists and is accessible
+- **"getAll timeout"** - DDL operation hung, server will retry with new connection
+- **Lock timeout** - Another agent is writing, wait and retry
 
-### Code Quality
-- ESLint configured with TypeScript rules
-- Prettier for consistent code formatting
-- Pre-publish build step ensures code is compiled
+### Docker Health Check Failures
+The healthcheck uses the `/health` endpoint. If failing:
+1. Ensure server started successfully (check logs)
+2. Verify port 3000 is not already in use
+3. Check database mount path is correct
 
-## Testing Queries
+### MERGE Query Failures
+If MERGE queries fail with "undefined properties":
+1. Check table schema with `getSchema`
+2. Ensure all properties in MERGE exist in schema
+3. Consider using CREATE OR REPLACE instead
 
-When testing the MCP server:
-1. Start with `getSchema` to understand the database structure
-2. Use simple queries first (e.g., `MATCH (n) RETURN n LIMIT 5`)
-3. Test both read and write operations (if not in read-only mode)
-4. Verify BigInt handling with large numeric values
+## Testing Strategy
 
-## Claude Desktop Integration
+Tests are organized by functionality:
+- `cli.test.ts` - CLI argument parsing and commands
+- `query-helpers.test.ts` - Query classification and batch execution  
+- `merge-validation.test.ts` - MERGE query validation
+- `lock-manager.test.ts` - Multi-agent coordination
+- `integration.test.ts` - End-to-end flows
+- `server-utils.test.ts` - Legacy tests (being migrated)
 
-Configure in Claude Desktop settings:
-```json
-{
-  "command": "node",
-  "args": ["/path/to/dist/index.js", "/path/to/database"],
-  "env": {
-    "KUZU_READ_ONLY": "true"
-  }
-}
-```
-
-## Debugging Tips
-
-- Check server console output for connection and query execution logs
-- Database path issues are the most common problem
-- Ensure Kuzu database version compatibility with the NPM package
-- For permission issues, verify read-only mode is properly set
-
-## Security Considerations
-
-- **Read-only mode**: Always use `KUZU_READ_ONLY=true` for untrusted environments
-- **Path validation**: The server trusts the provided database path
-- **Query validation**: No built-in query sanitization - relies on Kuzu's parser
-
-## Performance Notes
-
-- All query results are loaded into memory before returning
-- Large result sets may cause memory issues
-- No pagination support currently implemented
-- Schema retrieval queries full catalog tables
+When adding features:
+1. Add unit tests for new functions
+2. Add integration tests for user-facing changes
+3. Test error cases and edge conditions
+4. Mock external dependencies (kuzu module)

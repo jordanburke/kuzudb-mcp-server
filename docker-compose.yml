@@ -20,13 +20,21 @@ services:
   kuzu-mcp-http:
     image: ghcr.io/jordanburke/kuzudb-mcp-server:latest
     ports:
-      - "3000:3000"
+      - "3000:3000"  # MCP server
+      - "3001:3001"  # Web UI
     volumes:
       - kuzu-data:/database
+      - ./backups:/backups  # Optional: for storing backups
     environment:
       - KUZU_MCP_DATABASE_PATH=/database/kuzu.db
       - KUZU_READ_ONLY=false
       - PORT=3000
+      # Web UI configuration (enabled by default, set to false to disable)
+      # - KUZU_WEB_UI_ENABLED=false
+      - KUZU_WEB_UI_PORT=3001
+      # Optional: Enable authentication (uncomment and change password)
+      # - KUZU_WEB_UI_AUTH_USER=admin
+      # - KUZU_WEB_UI_AUTH_PASSWORD=changeme
     restart: unless-stopped
     # command: ["node", "dist/index.js", "--transport", "http", "--port", "8080", "--endpoint", "/kuzu"]
     healthcheck:

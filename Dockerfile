@@ -36,8 +36,8 @@ RUN pnpm install --frozen-lockfile --prod=false && \
 ENV NODE_ENV=production
 ENV KUZU_MCP_DATABASE_PATH=/database
 
-# Expose HTTP port
-EXPOSE 3000
+# Expose HTTP ports (MCP server and Web UI)
+EXPOSE 3000 3001
 
 # Run app in HTTP mode by default
 ENTRYPOINT ["sh", "-c", "node dist/index.js --transport http --port ${PORT:-3000}"]
