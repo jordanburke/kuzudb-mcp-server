@@ -38,7 +38,7 @@ export async function getDatabaseInfo(dbPath: string): Promise<BackupInfo | null
       timestamp: stats.mtime,
       size: stats.size,
     }
-  } catch (error) {
+  } catch {
     return null
   }
 }
@@ -71,14 +71,7 @@ export async function createBackup(dbPath: string, outputDir: string): Promise<s
   // Read main database file
   const mainData = await fs.readFile(info.mainFile)
 
-  // Write header with file info
-  const header = JSON.stringify({
-    mainFileName: path.basename(info.mainFile),
-    mainFileSize: mainData.length,
-    hasWal: !!info.walFile,
-    walFileSize: 0,
-    timestamp: info.timestamp,
-  })
+  // Prepare header data (unused variable removed)
 
   // If WAL exists, read it
   let walData: Buffer | null = null
@@ -133,9 +126,9 @@ export async function restoreBackup(backupPath: string, targetDbPath: string): P
   const gunzip = createGunzip()
 
   const chunks: Buffer[] = []
-  await pipeline(readStream, gunzip, async function* (source) {
+  await pipeline(readStream, gunzip, async function (source) {
     for await (const chunk of source) {
-      chunks.push(chunk)
+      chunks.push(chunk as Buffer)
     }
   })
 
@@ -144,7 +137,11 @@ export async function restoreBackup(backupPath: string, targetDbPath: string): P
   // Read header length
   const headerLength = data.readUInt32BE(0)
   const headerData = data.subarray(4, 4 + headerLength)
-  const header = JSON.parse(headerData.toString())
+  const header = JSON.parse(headerData.toString()) as {
+    mainFileSize: number
+    hasWal: boolean
+    walFileSize: number
+  }
 
   // Extract files
   let offset = 4 + headerLength
@@ -255,7 +252,11 @@ export async function restoreSimpleArchive(archive: Buffer, targetDbPath: string
 
   // Read header
   const headerJson = archive.subarray(4, 4 + headerLength).toString()
-  const header = JSON.parse(headerJson)
+  const header = JSON.parse(headerJson) as {
+    mainFileSize: number
+    hasWal: boolean
+    walFileSize: number
+  }
 
   // Extract main file
   let offset = 4 + headerLength

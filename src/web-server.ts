@@ -1,17 +1,11 @@
 import express from "express"
-import type { Request, Response } from "express"
+import type { Request, Response, Application } from "express"
 import multer from "multer"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { DatabaseManager } from "./server-core.js"
 import { getWebUIHTML } from "./web-ui.js"
-import {
-  createSimpleArchive,
-  restoreSimpleArchive,
-  exportDatabase,
-  importDatabase,
-  getDatabaseInfo,
-} from "./backup-utils.js"
+import { createSimpleArchive, restoreSimpleArchive, exportDatabase, getDatabaseInfo } from "./backup-utils.js"
 import * as os from "os"
 
 // Configure multer with increased limits and better handling
@@ -26,7 +20,7 @@ const multerConfig = {
     headerPairs: 2000, // Increase header pairs limit
   },
   // Add file filter to validate uploads
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req: express.Request, file: globalThis.Express.Multer.File, cb: multer.FileFilterCallback) => {
     console.log(`[Multer] Receiving file: ${file.originalname}, type: ${file.mimetype}`)
     cb(null, true) // Accept all files
   },
@@ -51,7 +45,7 @@ export interface WebServerOptions {
   authPassword?: string
 }
 
-export function createWebServer(options: WebServerOptions): express.Application {
+export function createWebServer(options: WebServerOptions): Application {
   const app = express()
 
   // Add logging middleware for debugging
@@ -143,13 +137,14 @@ export function createWebServer(options: WebServerOptions): express.Application 
   // Test POST endpoint - accepts any data
   app.post("/api/test", express.raw({ type: "*/*", limit: "100mb" }), (req: Request, res: Response) => {
     console.log("[/api/test] POST request received")
-    console.log("[/api/test] Body size:", req.body?.length || 0)
+    const bodySize = (req.body as Buffer)?.length || 0
+    console.log("[/api/test] Body size:", bodySize)
     console.log("[/api/test] Headers:", req.headers)
 
     res.json({
       success: true,
       message: "Test POST successful",
-      bodySize: req.body?.length || 0,
+      bodySize,
       headers: req.headers,
       timestamp: new Date().toISOString(),
     })
@@ -161,93 +156,99 @@ export function createWebServer(options: WebServerOptions): express.Application 
     res.json({
       success: true,
       message: "Echo successful",
-      body: req.body,
+      body: req.body as unknown,
       query: req.query,
       timestamp: new Date().toISOString(),
     })
   })
 
   // Simple single file upload endpoint (fallback for problematic browsers)
-  app.post("/api/upload-single", upload.single("file"), async (req: Request, res: Response) => {
-    console.log("[/api/upload-single] Request received")
+  app.post("/api/upload-single", upload.single("file"), (req: Request, res: Response) => {
+    void (async () => {
+      console.log("[/api/upload-single] Request received")
 
-    if (options.isReadOnly) {
-      return res.status(403).json({ error: "Database is in read-only mode" })
-    }
+      if (options.isReadOnly) {
+        return res.status(403).json({ error: "Database is in read-only mode" })
+      }
 
-    const file = req.file
-    const fileType = req.body.type // 'main' or 'wal'
+      const file = req.file
+      const fileType = (req.body as { type?: string }).type // 'main' or 'wal'
 
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" })
-    }
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" })
+      }
 
-    console.log(`[/api/upload-single] Received ${fileType} file: ${file.originalname}, size: ${file.size}`)
+      console.log(`[/api/upload-single] Received ${fileType} file: ${file.originalname}, size: ${file.size}`)
 
-    try {
-      const targetPath = fileType === "wal" ? `${options.databasePath}.wal` : options.databasePath
+      try {
+        const targetPath = fileType === "wal" ? `${options.databasePath}.wal` : options.databasePath
 
-      // Copy uploaded file to database location
-      const fileData = await fs.readFile(file.path)
-      await fs.writeFile(targetPath, fileData)
-      console.log(`[/api/upload-single] Wrote ${fileType} file to: ${targetPath}`)
+        // Copy uploaded file to database location
+        const fileData = await fs.readFile(file.path)
+        await fs.writeFile(targetPath, fileData)
+        console.log(`[/api/upload-single] Wrote ${fileType} file to: ${targetPath}`)
 
-      // Clean up temp file
-      await fs.unlink(file.path).catch(() => {})
+        // Clean up temp file
+        await fs.unlink(file.path).catch(() => {})
 
-      res.json({
-        success: true,
-        message: `${fileType} file uploaded successfully`,
-        type: fileType,
-        size: file.size,
-      })
-    } catch (error) {
-      console.error("[/api/upload-single] Error:", error)
+        res.json({
+          success: true,
+          message: `${fileType} file uploaded successfully`,
+          type: fileType as string,
+          size: file.size,
+        })
+      } catch (error) {
+        console.error("[/api/upload-single] Error:", error)
 
-      // Clean up temp file
-      await fs.unlink(file.path).catch(() => {})
+        // Clean up temp file
+        await fs.unlink(file.path).catch(() => {})
 
-      res.status(500).json({ error: "Failed to save file: " + (error as Error).message })
-    }
+        res.status(500).json({ error: "Failed to save file: " + (error as Error).message })
+      }
+    })()
   })
 
   // Database info endpoint
-  app.get("/api/info", async (req: Request, res: Response) => {
-    try {
-      const info = await getDatabaseInfo(options.databasePath)
-      res.json({
-        ...info,
-        isReadOnly: options.isReadOnly,
-        connected: !!options.dbManager.conn,
-      })
-    } catch (error) {
-      console.error("Error getting database info:", error)
-      res.status(500).json({ error: "Failed to get database info" })
-    }
+  app.get("/api/info", (req: Request, res: Response) => {
+    void (async () => {
+      try {
+        const info = await getDatabaseInfo(options.databasePath)
+        res.json({
+          ...info,
+          isReadOnly: options.isReadOnly,
+          connected: !!options.dbManager.conn,
+        })
+      } catch (error) {
+        console.error("Error getting database info:", error)
+        res.status(500).json({ error: "Failed to get database info" })
+      }
+    })()
   })
 
   // Download backup endpoint
-  app.get("/api/backup", async (req: Request, res: Response) => {
-    try {
-      // Create a simple archive in memory
-      const archive = await createSimpleArchive(options.databasePath)
+  app.get("/api/backup", (req: Request, res: Response) => {
+    void (async () => {
+      try {
+        // Create a simple archive in memory
+        const archive = await createSimpleArchive(options.databasePath)
 
-      // Set headers for download
-      const filename = `kuzu-backup-${new Date().toISOString().slice(0, 10)}.kuzu`
-      res.setHeader("Content-Type", "application/octet-stream")
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`)
-      res.setHeader("Content-Length", archive.length.toString())
+        // Set headers for download
+        const filename = `kuzu-backup-${new Date().toISOString().slice(0, 10)}.kuzu`
+        res.setHeader("Content-Type", "application/octet-stream")
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`)
+        res.setHeader("Content-Length", archive.length.toString())
 
-      // Send the archive
-      res.send(archive)
-    } catch (error) {
-      console.error("Error creating backup:", error)
-      res.status(500).json({ error: "Failed to create backup" })
-    }
+        // Send the archive
+        res.send(archive)
+      } catch (error) {
+        console.error("Error creating backup:", error)
+        res.status(500).json({ error: "Failed to create backup" })
+      }
+    })()
   })
 
   // Restore backup endpoint - handles both backup archives and raw database files
-  app.post("/api/restore", (req: Request, res: Response, next) => {
+  app.post("/api/restore", (req: Request, res: Response, _next) => {
     console.log("[/api/restore] Request received")
     console.log("[/api/restore] Headers:", req.headers)
 
@@ -256,186 +257,195 @@ export function createWebServer(options: WebServerOptions): express.Application 
     }
 
     // Use multer to handle the upload
-    uploadMultiple(req, res, async (err) => {
-      if (err) {
-        console.error("[/api/restore] Multer error:", err)
-        console.error("Error details:", {
-          code: err.code,
-          field: err.field,
-          storageErrors: err.storageErrors,
-        })
+    uploadMultiple(req, res, (err) => {
+      void (async () => {
+        if (err) {
+          console.error("[/api/restore] Multer error:", err)
+          const multerErr = err as multer.MulterError & { field?: string; storageErrors?: unknown }
+          console.error("Error details:", {
+            code: multerErr.code,
+            field: multerErr.field,
+            storageErrors: multerErr.storageErrors,
+          })
 
-        // Handle specific multer errors
-        if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(413).json({ error: "File too large. Maximum size is 500MB." })
-        }
-        if (err.code === "LIMIT_FILE_COUNT") {
-          return res.status(400).json({ error: "Too many files. Maximum 3 files allowed." })
-        }
-        if (err.code === "LIMIT_UNEXPECTED_FILE") {
-          return res.status(400).json({ error: "Unexpected file field: " + err.field })
-        }
-
-        return res.status(500).json({ error: "Upload failed: " + err.message })
-      }
-
-      console.log("[/api/restore] Files uploaded successfully")
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] }
-
-      // Check what type of upload this is
-      const backupFile = files.backup?.[0]
-      const mainFile = files.mainFile?.[0]
-      const walFile = files.walFile?.[0]
-
-      if (!backupFile && !mainFile) {
-        return res.status(400).json({ error: "No files uploaded" })
-      }
-
-      const tempFiles: string[] = []
-
-      try {
-        if (backupFile) {
-          // Handle backup archive restore
-          console.log("Restoring from backup archive:", backupFile.originalname)
-          tempFiles.push(backupFile.path)
-
-          // Read the uploaded file
-          const archive = await fs.readFile(backupFile.path)
-
-          // Create a temporary path for restoration
-          const tempPath = path.join(os.tmpdir(), `kuzu-restore-${Date.now()}`)
-
-          // Restore to temporary location first
-          await restoreSimpleArchive(archive, tempPath)
-
-          // Move restored files to actual location
-          const mainData = await fs.readFile(tempPath)
-          await fs.writeFile(options.databasePath, mainData)
-
-          // Check for WAL file
-          try {
-            const walData = await fs.readFile(`${tempPath}.wal`)
-            await fs.writeFile(`${options.databasePath}.wal`, walData)
-          } catch {
-            // WAL file might not exist
+          // Handle specific multer errors
+          if (multerErr.code === "LIMIT_FILE_SIZE") {
+            return res.status(413).json({ error: "File too large. Maximum size is 500MB." })
+          }
+          if (multerErr.code === "LIMIT_FILE_COUNT") {
+            return res.status(400).json({ error: "Too many files. Maximum 3 files allowed." })
+          }
+          if (multerErr.code === "LIMIT_UNEXPECTED_FILE") {
+            return res.status(400).json({ error: "Unexpected file field: " + multerErr.field })
           }
 
-          // Clean up temp files
-          await fs.unlink(tempPath).catch(() => {})
-          await fs.unlink(`${tempPath}.wal`).catch(() => {})
-        } else if (mainFile) {
-          // Handle raw database files
-          console.log("Restoring from raw database files:", mainFile.originalname)
-          tempFiles.push(mainFile.path)
-          if (walFile) {
-            tempFiles.push(walFile.path)
+          return res.status(500).json({ error: "Upload failed: " + (err as Error).message })
+        }
+
+        console.log("[/api/restore] Files uploaded successfully")
+        const files = req.files as { [fieldname: string]: globalThis.Express.Multer.File[] }
+
+        // Check what type of upload this is
+        const backupFile = files.backup?.[0]
+        const mainFile = files.mainFile?.[0]
+        const walFile = files.walFile?.[0]
+
+        if (!backupFile && !mainFile) {
+          return res.status(400).json({ error: "No files uploaded" })
+        }
+
+        const tempFiles: string[] = []
+
+        try {
+          if (backupFile) {
+            // Handle backup archive restore
+            console.log("Restoring from backup archive:", backupFile.originalname)
+            tempFiles.push(backupFile.path)
+
+            // Read the uploaded file
+            const archive = await fs.readFile(backupFile.path)
+
+            // Create a temporary path for restoration
+            const tempPath = path.join(os.tmpdir(), `kuzu-restore-${Date.now()}`)
+
+            // Restore to temporary location first
+            await restoreSimpleArchive(archive, tempPath)
+
+            // Move restored files to actual location
+            const mainData = await fs.readFile(tempPath)
+            await fs.writeFile(options.databasePath, mainData)
+
+            // Check for WAL file
+            try {
+              const walData = await fs.readFile(`${tempPath}.wal`)
+              await fs.writeFile(`${options.databasePath}.wal`, walData)
+            } catch {
+              // WAL file might not exist
+            }
+
+            // Clean up temp files
+            await fs.unlink(tempPath).catch(() => {})
+            await fs.unlink(`${tempPath}.wal`).catch(() => {})
+          } else if (mainFile) {
+            // Handle raw database files
+            console.log("Restoring from raw database files:", mainFile.originalname)
+            tempFiles.push(mainFile.path)
+            if (walFile) {
+              tempFiles.push(walFile.path)
+            }
+
+            // Copy main database file
+            const mainData = await fs.readFile(mainFile.path)
+            await fs.writeFile(options.databasePath, mainData)
+            console.log(`Wrote main database file: ${options.databasePath}`)
+
+            // Copy WAL file if provided
+            if (walFile) {
+              const walData = await fs.readFile(walFile.path)
+              await fs.writeFile(`${options.databasePath}.wal`, walData)
+              console.log(`Wrote WAL file: ${options.databasePath}.wal`)
+            } else {
+              // Try to remove existing WAL file if no new one provided
+              await fs.unlink(`${options.databasePath}.wal`).catch(() => {
+                console.log("No existing WAL file to remove")
+              })
+            }
           }
 
-          // Copy main database file
-          const mainData = await fs.readFile(mainFile.path)
-          await fs.writeFile(options.databasePath, mainData)
-          console.log(`Wrote main database file: ${options.databasePath}`)
-
-          // Copy WAL file if provided
-          if (walFile) {
-            const walData = await fs.readFile(walFile.path)
-            await fs.writeFile(`${options.databasePath}.wal`, walData)
-            console.log(`Wrote WAL file: ${options.databasePath}.wal`)
-          } else {
-            // Try to remove existing WAL file if no new one provided
-            await fs.unlink(`${options.databasePath}.wal`).catch(() => {
-              console.log("No existing WAL file to remove")
-            })
+          // Clean up all temp files
+          for (const tempFile of tempFiles) {
+            await fs.unlink(tempFile).catch(() => {})
           }
+
+          res.json({
+            success: true,
+            message: "Database restored successfully. You may need to restart the server for changes to take effect.",
+          })
+        } catch (error) {
+          console.error("Error restoring database:", error)
+
+          // Clean up uploaded files
+          for (const tempFile of tempFiles) {
+            await fs.unlink(tempFile).catch(() => {})
+          }
+
+          res.status(500).json({ error: "Failed to restore database: " + (error as Error).message })
         }
-
-        // Clean up all temp files
-        for (const tempFile of tempFiles) {
-          await fs.unlink(tempFile).catch(() => {})
-        }
-
-        res.json({
-          success: true,
-          message: "Database restored successfully. You may need to restart the server for changes to take effect.",
-        })
-      } catch (error) {
-        console.error("Error restoring database:", error)
-
-        // Clean up uploaded files
-        for (const tempFile of tempFiles) {
-          await fs.unlink(tempFile).catch(() => {})
-        }
-
-        res.status(500).json({ error: "Failed to restore database: " + (error as Error).message })
-      }
+      })()
     })
   })
 
   // Export database using Kuzu's EXPORT DATABASE
-  app.get("/api/export", async (req: Request, res: Response) => {
-    try {
-      const exportDir = path.join(os.tmpdir(), `kuzu-export-${Date.now()}`)
+  app.get("/api/export", (req: Request, res: Response) => {
+    void (async () => {
+      try {
+        const exportDir = path.join(os.tmpdir(), `kuzu-export-${Date.now()}`)
 
-      // Export database
-      await exportDatabase(options.dbManager.conn, exportDir)
+        // Export database
+        await exportDatabase(options.dbManager.conn, exportDir)
 
-      // TODO: Create a ZIP of the exported files
-      // For now, we'll just return a message
-      res.json({
-        success: true,
-        message: "Export functionality coming soon. Use EXPORT DATABASE command directly for now.",
-        exportPath: exportDir,
-      })
+        // TODO: Create a ZIP of the exported files
+        // For now, we'll just return a message
+        res.json({
+          success: true,
+          message: "Export functionality coming soon. Use EXPORT DATABASE command directly for now.",
+          exportPath: exportDir,
+        })
 
-      // Clean up export directory after some time
-      setTimeout(async () => {
-        try {
-          await fs.rm(exportDir, { recursive: true, force: true })
-        } catch {
-          // Ignore cleanup errors
-        }
-      }, 60000) // Clean up after 1 minute
-    } catch (error) {
-      console.error("Error exporting database:", error)
-      res.status(500).json({ error: "Failed to export database: " + (error as Error).message })
-    }
+        // Clean up export directory after some time
+        setTimeout(() => {
+          void (async () => {
+            try {
+              await fs.rm(exportDir, { recursive: true, force: true })
+            } catch {
+              // Ignore cleanup errors
+            }
+          })()
+        }, 60000) // Clean up after 1 minute
+      } catch (error) {
+        console.error("Error exporting database:", error)
+        res.status(500).json({ error: "Failed to export database: " + (error as Error).message })
+      }
+    })()
   })
 
   // Import database using Kuzu's IMPORT DATABASE
-  app.post("/api/import", upload.single("export"), async (req: Request, res: Response) => {
-    if (options.isReadOnly) {
-      return res.status(403).json({ error: "Database is in read-only mode" })
-    }
+  app.post("/api/import", upload.single("export"), (req: Request, res: Response) => {
+    void (async () => {
+      if (options.isReadOnly) {
+        return res.status(403).json({ error: "Database is in read-only mode" })
+      }
 
-    const file = req.file
-    if (!file) {
-      return res.status(400).json({ error: "No file uploaded" })
-    }
+      const file = req.file
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" })
+      }
 
-    try {
-      // TODO: Extract ZIP file and import
-      // For now, return a message
-      res.json({
-        success: false,
-        message: "Import functionality coming soon. Use IMPORT DATABASE command directly for now.",
-      })
+      try {
+        // TODO: Extract ZIP file and import
+        // For now, return a message
+        res.json({
+          success: false,
+          message: "Import functionality coming soon. Use IMPORT DATABASE command directly for now.",
+        })
 
-      // Clean up uploaded file
-      await fs.unlink(file.path).catch(() => {})
-    } catch (error) {
-      console.error("Error importing database:", error)
+        // Clean up uploaded file
+        await fs.unlink(file.path).catch(() => {})
+      } catch (error) {
+        console.error("Error importing database:", error)
 
-      // Clean up uploaded file
-      await fs.unlink(file.path).catch(() => {})
+        // Clean up uploaded file
+        await fs.unlink(file.path).catch(() => {})
 
-      res.status(500).json({ error: "Failed to import database: " + (error as Error).message })
-    }
+        res.status(500).json({ error: "Failed to import database: " + (error as Error).message })
+      }
+    })()
   })
 
   return app
 }
 
-export async function startWebServer(options: WebServerOptions): Promise<void> {
+export function startWebServer(options: WebServerOptions): void {
   console.error(`[startWebServer] Called with port ${options.port}`)
 
   try {

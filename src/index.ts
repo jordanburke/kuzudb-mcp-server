@@ -372,7 +372,7 @@ async function main(): Promise<void> {
       const authPassword = process.env.KUZU_WEB_UI_AUTH_PASSWORD
 
       try {
-        await startWebServer({
+        startWebServer({
           port: webPort,
           dbManager: sharedDbManager,
           databasePath: options.databasePath,

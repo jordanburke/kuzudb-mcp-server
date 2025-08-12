@@ -64,16 +64,16 @@
     "@types/express": "^4.17.23",
     "@types/multer": "^1.4.13",
     "express": "^4.21.2",
-    "fastmcp": "^3.14.1",
+    "fastmcp": "^3.14.4",
     "kuzu": "0.11.1",
     "multer": "^2.0.2",
-    "zod": "^4.0.15"
+    "zod": "^4.0.17"
   },
   "devDependencies": {
-    "@eslint/js": "^9.32.0",
+    "@eslint/js": "^9.33.0",
     "@types/node": "^22.17.1",
-    "@typescript-eslint/eslint-plugin": "^8.39.0",
-    "@typescript-eslint/parser": "^8.39.0",
+    "@typescript-eslint/eslint-plugin": "^8.39.1",
+    "@typescript-eslint/parser": "^8.39.1",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "c8": "^10.1.3",
