@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "authorizationServer": {
+    "issuer": "https://auth.example.com",
+    "authorizationEndpoint": "https://auth.example.com/oauth/authorize",
+    "tokenEndpoint": "https://auth.example.com/oauth/token",
+    "jwksUri": "https://auth.example.com/.well-known/jwks.json",
+    "responseTypesSupported": ["code"]
+  },
+  "protectedResource": {
+    "resource": "mcp://kuzu-server",
+    "authorizationServers": ["https://auth.example.com"]
+  },
+  "audience": "mcp://kuzu-server",
+  "algorithms": ["RS256", "ES256"],
+  "cacheTtl": 300000
+}

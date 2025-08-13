@@ -23,6 +23,7 @@ interface CLIOptions {
   transport?: "stdio" | "http"
   port?: number
   endpoint?: string
+  oauthConfig?: string
 }
 
 function expandPath(inputPath: string): string {
@@ -136,6 +137,15 @@ export function parseArgs(args: string[]): CLIOptions {
         }
         break
 
+      case "--oauth-config":
+        if (i + 1 < args.length && args[i + 1] && !args[i + 1]!.startsWith("-")) {
+          options.oauthConfig = args[++i]
+        } else {
+          console.error("Error: --oauth-config requires a JSON file path")
+          process.exit(1)
+        }
+        break
+
       case "--max-results":
         if (i + 1 < args.length && args[i + 1]) {
           options.maxResults = parseInt(args[++i]!, 10)
@@ -183,10 +193,12 @@ OPTIONS:
   --transport <type>      Transport type: stdio (default) or http
   --port <n>              HTTP server port (default: 3000)
   --endpoint <path>       HTTP endpoint path (default: /mcp)
+  --oauth-config <file>   Path to OAuth configuration JSON file
 
 ENVIRONMENT VARIABLES:
   KUZU_MCP_DATABASE_PATH  Database path (used if not provided as argument)
   KUZU_READ_ONLY          Set to "true" for read-only mode
+  KUZU_OAUTH_CONFIG       Path to OAuth configuration JSON file
 
 EXAMPLES:
   # Start MCP server
@@ -212,6 +224,9 @@ EXAMPLES:
 
   # Custom HTTP endpoint
   npx kuzudb-mcp-server ./my-database --transport http --endpoint /kuzu
+
+  # With OAuth authentication
+  npx kuzudb-mcp-server ./my-database --transport http --oauth-config ./oauth.json
 `)
 }
 

@@ -12,6 +12,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import * as kuzu from "kuzu"
 import { parseArgs, showHelp, showVersion, inspectDatabase, validateDatabase, initDatabase, runTests } from "./cli.js"
+import { OAuthConfig } from "./server-fastmcp.js"
 import { execSync } from "child_process"
 import * as path from "path"
 import * as fs from "fs"
@@ -228,6 +229,7 @@ interface ServerOptions {
   transport?: string
   port?: number
   endpoint?: string
+  oauth?: OAuthConfig
   [key: string]: unknown
 }
 
@@ -340,6 +342,21 @@ async function main(): Promise<void> {
     process.env.KUZU_READ_ONLY = "true"
   }
 
+  // Load OAuth configuration if provided
+  let oauthConfig: OAuthConfig | undefined
+  const oauthConfigPath = options.oauthConfig || process.env.KUZU_OAUTH_CONFIG
+  if (oauthConfigPath) {
+    try {
+      console.error(`🔐 Loading OAuth configuration from: ${oauthConfigPath}`)
+      const configContent = await fsPromises.readFile(oauthConfigPath, "utf-8")
+      oauthConfig = JSON.parse(configContent) as OAuthConfig
+      console.error("✓ OAuth configuration loaded successfully")
+    } catch (error) {
+      console.error("❌ Failed to load OAuth configuration:", error)
+      process.exit(1)
+    }
+  }
+
   // Choose transport based on options
   const transport = options.transport || "stdio"
 
@@ -350,6 +367,7 @@ async function main(): Promise<void> {
       isReadOnly: options.readonly || process.env.KUZU_READ_ONLY === "true",
       port: options.port,
       endpoint: options.endpoint,
+      oauth: oauthConfig,
     })
 
     // Start FastMCP server

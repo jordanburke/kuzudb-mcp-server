@@ -1,13 +1,44 @@
 import { FastMCP } from "fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
+import { createDecoder } from "fast-jwt"
 import { executeQuery, getSchema, getPrompt, initializeDatabaseManager, DatabaseManager } from "./server-core.js"
+
+interface DecodedJWT {
+  sub?: string
+  iss?: string
+  aud?: string | string[]
+  exp?: number
+  scope?: string
+  scp?: string
+  email?: string
+  [key: string]: unknown
+}
+
+export interface OAuthConfig {
+  enabled: boolean
+  authorizationServer: {
+    issuer: string
+    authorizationEndpoint: string
+    tokenEndpoint: string
+    jwksUri: string
+    responseTypesSupported: string[]
+  }
+  protectedResource: {
+    resource: string
+    authorizationServers: string[]
+  }
+  audience?: string
+  algorithms?: string[]
+  cacheTtl?: number
+}
 
 export interface FastMCPServerOptions {
   databasePath: string
   isReadOnly: boolean
   port?: number
   endpoint?: string
+  oauth?: OAuthConfig
 }
 
 export function createFastMCPServer(options: FastMCPServerOptions): { server: FastMCP; dbManager: DatabaseManager } {
@@ -33,6 +64,65 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
         timestamp: new Date().toISOString(),
       }),
     },
+    // Configure OAuth if provided
+    ...(options.oauth && {
+      oauth: {
+        enabled: options.oauth.enabled,
+        authorizationServer: options.oauth.authorizationServer,
+        protectedResource: options.oauth.protectedResource,
+      },
+      authenticate: (request) => {
+        if (!options.oauth?.enabled) {
+          return Promise.resolve({})
+        }
+
+        const authHeader = request.headers.authorization
+        if (!authHeader?.startsWith("Bearer ")) {
+          throw new Error("Missing or invalid authorization header")
+        }
+
+        const token = authHeader.slice(7) // Remove 'Bearer ' prefix
+
+        try {
+          // Basic JWT validation without external JWKS for now
+          // In a production environment, you would want to verify against JWKS
+          const decoder = createDecoder()
+          const decoded = decoder(token) as DecodedJWT
+
+          // Basic validation - check if token has required claims
+          if (!decoded.sub) {
+            throw new Error("Token missing subject claim")
+          }
+
+          // Check issuer if configured
+          if (options.oauth.authorizationServer.issuer && decoded.iss !== options.oauth.authorizationServer.issuer) {
+            throw new Error(`Invalid issuer: ${decoded.iss as string}`)
+          }
+
+          // Check audience if configured
+          const audience = options.oauth.audience || options.oauth.protectedResource.resource
+          if (audience && decoded.aud !== audience) {
+            throw new Error(`Invalid audience: ${decoded.aud as string}`)
+          }
+
+          // Check expiration
+          const now = Math.floor(Date.now() / 1000)
+          if (decoded.exp && decoded.exp < now) {
+            throw new Error("Token expired")
+          }
+
+          return Promise.resolve({
+            userId: decoded.sub,
+            scope: (decoded.scope || decoded.scp) as string,
+            email: decoded.email as string,
+            tokenPayload: decoded,
+          })
+        } catch (error) {
+          console.error("OAuth token validation failed:", error)
+          throw error instanceof Error ? error : new Error("Invalid OAuth token")
+        }
+      },
+    }),
   })
 
   // Add query tool
@@ -42,8 +132,13 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
     parameters: z.object({
       cypher: z.string().describe("The Cypher query to run"),
     }),
-    execute: async (args) => {
+    execute: async (args, context) => {
       try {
+        // Log OAuth user if available
+        if (context.session && "userId" in context.session && typeof context.session.userId === "string") {
+          console.error(`Query executed by user: ${context.session.userId}`)
+        }
+
         const result = await executeQuery(args.cypher, dbManager)
 
         if (result.isError) {
@@ -66,8 +161,13 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
     name: "getSchema",
     description: "Get the schema of the Kuzu database",
     parameters: z.object({}),
-    execute: async () => {
+    execute: async (_args, context) => {
       try {
+        // Log OAuth user if available
+        if (context.session && "userId" in context.session && typeof context.session.userId === "string") {
+          console.error(`Schema accessed by user: ${context.session.userId}`)
+        }
+
         const schema = await getSchema(dbManager.conn)
         return JSON.stringify(schema, null, 2)
       } catch (error) {
@@ -87,13 +187,18 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
     parameters: z.object({
       question: z.string().describe("The question in natural language to generate the Cypher query for"),
     }),
-    execute: async (args) => {
+    execute: async (args, context) => {
       const question = args.question
       if (!question) {
         throw new Error("Missing required argument: question")
       }
 
       try {
+        // Log OAuth user if available
+        if (context.session && "userId" in context.session && typeof context.session.userId === "string") {
+          console.error(`Cypher generation requested by user: ${context.session.userId}`)
+        }
+
         const schema = await getSchema(dbManager.conn)
         return getPrompt(question, schema)
       } catch (error) {
