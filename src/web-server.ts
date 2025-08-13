@@ -49,7 +49,7 @@ export function createWebServer(options: WebServerOptions): Application {
   const app = express()
 
   // Add logging middleware for debugging
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
     if (req.method === "POST") {
       console.log("Content-Type:", req.headers["content-type"])
@@ -80,17 +80,25 @@ export function createWebServer(options: WebServerOptions): Application {
       const authHeader = req.headers.authorization
       if (!authHeader) {
         res.setHeader("WWW-Authenticate", 'Basic realm="Kuzu Database Manager"')
-        return res.status(401).send("Authentication required")
+        res.status(401).send("Authentication required")
+        return
       }
 
-      const auth = Buffer.from(authHeader.split(" ")[1], "base64").toString()
+      const authParts = authHeader.split(" ")
+      if (authParts.length !== 2 || !authParts[1]) {
+        res.setHeader("WWW-Authenticate", 'Basic realm="Kuzu Database Manager"')
+        res.status(401).send("Invalid authorization header")
+        return
+      }
+
+      const auth = Buffer.from(authParts[1], "base64").toString()
       const [user, pass] = auth.split(":")
 
       if (user === options.authUser && pass === options.authPassword) {
         next()
       } else {
         res.setHeader("WWW-Authenticate", 'Basic realm="Kuzu Database Manager"')
-        return res.status(401).send("Invalid credentials")
+        res.status(401).send("Invalid credentials")
       }
     })
   }
@@ -104,17 +112,18 @@ export function createWebServer(options: WebServerOptions): Application {
 
     // Handle preflight requests
     if (req.method === "OPTIONS") {
-      return res.sendStatus(204)
+      res.sendStatus(204)
+      return
     }
     next()
   })
 
   // Serve the web UI
-  app.get("/", (req: Request, res: Response) => {
+  app.get("/", (_req: Request, res: Response) => {
     res.redirect("/admin")
   })
 
-  app.get("/admin", (req: Request, res: Response) => {
+  app.get("/admin", (_req: Request, res: Response) => {
     const html = getWebUIHTML({
       databasePath: options.databasePath,
       isReadOnly: options.isReadOnly,
@@ -124,7 +133,7 @@ export function createWebServer(options: WebServerOptions): Application {
   })
 
   // Health check endpoint
-  app.get("/health", (req: Request, res: Response) => {
+  app.get("/health", (_req: Request, res: Response) => {
     res.json({
       status: "healthy",
       service: "kuzudb-web-manager",
@@ -168,14 +177,16 @@ export function createWebServer(options: WebServerOptions): Application {
       console.log("[/api/upload-single] Request received")
 
       if (options.isReadOnly) {
-        return res.status(403).json({ error: "Database is in read-only mode" })
+        res.status(403).json({ error: "Database is in read-only mode" })
+        return
       }
 
       const file = req.file
       const fileType = (req.body as { type?: string }).type // 'main' or 'wal'
 
       if (!file) {
-        return res.status(400).json({ error: "No file uploaded" })
+        res.status(400).json({ error: "No file uploaded" })
+        return
       }
 
       console.log(`[/api/upload-single] Received ${fileType} file: ${file.originalname}, size: ${file.size}`)
@@ -209,7 +220,7 @@ export function createWebServer(options: WebServerOptions): Application {
   })
 
   // Database info endpoint
-  app.get("/api/info", (req: Request, res: Response) => {
+  app.get("/api/info", (_req: Request, res: Response) => {
     void (async () => {
       try {
         const info = await getDatabaseInfo(options.databasePath)
@@ -226,7 +237,7 @@ export function createWebServer(options: WebServerOptions): Application {
   })
 
   // Download backup endpoint
-  app.get("/api/backup", (req: Request, res: Response) => {
+  app.get("/api/backup", (_req: Request, res: Response) => {
     void (async () => {
       try {
         // Create a simple archive in memory
@@ -253,7 +264,8 @@ export function createWebServer(options: WebServerOptions): Application {
     console.log("[/api/restore] Headers:", req.headers)
 
     if (options.isReadOnly) {
-      return res.status(403).json({ error: "Database is in read-only mode" })
+      res.status(403).json({ error: "Database is in read-only mode" })
+      return
     }
 
     // Use multer to handle the upload
@@ -270,16 +282,20 @@ export function createWebServer(options: WebServerOptions): Application {
 
           // Handle specific multer errors
           if (multerErr.code === "LIMIT_FILE_SIZE") {
-            return res.status(413).json({ error: "File too large. Maximum size is 500MB." })
+            res.status(413).json({ error: "File too large. Maximum size is 500MB." })
+            return
           }
           if (multerErr.code === "LIMIT_FILE_COUNT") {
-            return res.status(400).json({ error: "Too many files. Maximum 3 files allowed." })
+            res.status(400).json({ error: "Too many files. Maximum 3 files allowed." })
+            return
           }
           if (multerErr.code === "LIMIT_UNEXPECTED_FILE") {
-            return res.status(400).json({ error: "Unexpected file field: " + multerErr.field })
+            res.status(400).json({ error: "Unexpected file field: " + multerErr.field })
+            return
           }
 
-          return res.status(500).json({ error: "Upload failed: " + (err as Error).message })
+          res.status(500).json({ error: "Upload failed: " + (err as Error).message })
+          return
         }
 
         console.log("[/api/restore] Files uploaded successfully")
@@ -291,7 +307,8 @@ export function createWebServer(options: WebServerOptions): Application {
         const walFile = files.walFile?.[0]
 
         if (!backupFile && !mainFile) {
-          return res.status(400).json({ error: "No files uploaded" })
+          res.status(400).json({ error: "No files uploaded" })
+          return
         }
 
         const tempFiles: string[] = []
@@ -376,7 +393,7 @@ export function createWebServer(options: WebServerOptions): Application {
   })
 
   // Export database using Kuzu's EXPORT DATABASE
-  app.get("/api/export", (req: Request, res: Response) => {
+  app.get("/api/export", (_req: Request, res: Response) => {
     void (async () => {
       try {
         const exportDir = path.join(os.tmpdir(), `kuzu-export-${Date.now()}`)
@@ -413,12 +430,14 @@ export function createWebServer(options: WebServerOptions): Application {
   app.post("/api/import", upload.single("export"), (req: Request, res: Response) => {
     void (async () => {
       if (options.isReadOnly) {
-        return res.status(403).json({ error: "Database is in read-only mode" })
+        res.status(403).json({ error: "Database is in read-only mode" })
+        return
       }
 
       const file = req.file
       if (!file) {
-        return res.status(400).json({ error: "No file uploaded" })
+        res.status(400).json({ error: "No file uploaded" })
+        return
       }
 
       try {
@@ -480,7 +499,7 @@ export function startWebServer(options: WebServerOptions): void {
       server.on("connection", (socket) => {
         socket.setTimeout(5 * 60 * 1000) // 5 minutes
         socket.on("error", (err) => {
-          console.error("[Socket error]:", err.code)
+          console.error("[Socket error]:", (err as NodeJS.ErrnoException).code)
         })
       })
     }
