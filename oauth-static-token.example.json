@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "staticToken": "your-secret-bearer-token-here",
+  "staticUser": {
+    "userId": "admin",
+    "email": "admin@example.com",
+    "scope": "read write admin"
+  }
+}

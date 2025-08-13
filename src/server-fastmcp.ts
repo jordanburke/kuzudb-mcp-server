@@ -17,14 +17,22 @@ interface DecodedJWT {
 
 export interface OAuthConfig {
   enabled: boolean
-  authorizationServer: {
+  // Static token mode
+  staticToken?: string
+  staticUser?: {
+    userId: string
+    email?: string
+    scope?: string
+  }
+  // JWT mode (optional)
+  authorizationServer?: {
     issuer: string
     authorizationEndpoint: string
     tokenEndpoint: string
     jwksUri: string
     responseTypesSupported: string[]
   }
-  protectedResource: {
+  protectedResource?: {
     resource: string
     authorizationServers: string[]
   }
@@ -84,6 +92,27 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
         const token = authHeader.slice(7) // Remove 'Bearer ' prefix
 
         try {
+          // Static token mode
+          if (options.oauth.staticToken) {
+            if (token !== options.oauth.staticToken) {
+              throw new Error("Invalid static token")
+            }
+
+            // Return static user information
+            const staticUser = options.oauth.staticUser || { userId: "static-user" }
+            return Promise.resolve({
+              userId: staticUser.userId,
+              email: staticUser.email || "",
+              scope: staticUser.scope || "",
+              tokenType: "static",
+            })
+          }
+
+          // JWT mode - requires authorizationServer configuration
+          if (!options.oauth.authorizationServer) {
+            throw new Error("OAuth configuration incomplete: missing authorizationServer or staticToken")
+          }
+
           // Basic JWT validation without external JWKS for now
           // In a production environment, you would want to verify against JWKS
           const decoder = createDecoder()
@@ -100,7 +129,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
           }
 
           // Check audience if configured
-          const audience = options.oauth.audience || options.oauth.protectedResource.resource
+          const audience = options.oauth.audience || options.oauth.protectedResource?.resource
           if (audience && decoded.aud !== audience) {
             throw new Error(`Invalid audience: ${decoded.aud as string}`)
           }
@@ -116,6 +145,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
             scope: (decoded.scope || decoded.scp) as string,
             email: decoded.email as string,
             tokenPayload: decoded,
+            tokenType: "jwt",
           })
         } catch (error) {
           console.error("OAuth token validation failed:", error)

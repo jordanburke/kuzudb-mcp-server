@@ -225,7 +225,7 @@ EXAMPLES:
   # Custom HTTP endpoint
   npx kuzudb-mcp-server ./my-database --transport http --endpoint /kuzu
 
-  # With OAuth authentication
+  # With OAuth authentication (JWT or static token)
   npx kuzudb-mcp-server ./my-database --transport http --oauth-config ./oauth.json
 `)
 }

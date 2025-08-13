@@ -1,14 +1,23 @@
 # OAuth Authentication
 
-The Kuzu MCP server supports optional OAuth 2.0 authentication when running in HTTP transport mode. This allows you to secure your database endpoints with industry-standard authentication.
+The Kuzu MCP server supports optional authentication when running in HTTP transport mode. You can choose between static bearer token authentication or full OAuth 2.0 JWT validation.
 
-## Features
+## Authentication Modes
 
-- **JWT Token Validation**: Validates Bearer tokens in Authorization headers
+### Static Bearer Token (Simple)
+- **Pre-shared Secret**: Uses a static token for authentication
+- **Fast Setup**: Minimal configuration required
+- **Perfect for**: Development, internal tools, simple deployments
+
+### JWT Token Validation (Advanced)
+- **OAuth 2.0 Compliant**: Validates Bearer tokens in Authorization headers
 - **Claims Verification**: Checks issuer, audience, subject, and expiration claims
+- **Perfect for**: Production deployments, integration with identity providers
+
+## Common Features
 - **User Context**: Provides authenticated user information to tools
 - **Audit Logging**: Logs user actions for security monitoring
-- **Configurable**: Support for different OAuth providers and settings
+- **Configurable**: Support for different authentication modes
 
 ## Configuration
 
@@ -24,7 +33,33 @@ KUZU_OAUTH_CONFIG=./oauth.json npx kuzudb-mcp-server ./my-database --transport h
 
 ### Configuration File Format
 
-Create a JSON configuration file (e.g., `oauth.json`):
+#### Option 1: Static Bearer Token (Recommended for Development)
+
+Create a simple JSON configuration file (e.g., `oauth-static.json`):
+
+```json
+{
+  "enabled": true,
+  "staticToken": "your-secret-bearer-token-here",
+  "staticUser": {
+    "userId": "admin",
+    "email": "admin@example.com", 
+    "scope": "read write admin"
+  }
+}
+```
+
+**Minimal Static Token Config:**
+```json
+{
+  "enabled": true,
+  "staticToken": "kuzu-secret-123"
+}
+```
+
+#### Option 2: Full JWT OAuth 2.0 Configuration
+
+Create a complete OAuth configuration file (e.g., `oauth-jwt.json`):
 
 ```json
 {
