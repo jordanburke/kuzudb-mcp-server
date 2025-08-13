@@ -499,7 +499,7 @@ export function startWebServer(options: WebServerOptions): void {
       server.on("connection", (socket) => {
         socket.setTimeout(5 * 60 * 1000) // 5 minutes
         socket.on("error", (err) => {
-          console.error("[Socket error]:", (err as NodeJS.ErrnoException).code)
+          console.error("[Socket error]:", (err as Error & { code?: string }).code)
         })
       })
     }
