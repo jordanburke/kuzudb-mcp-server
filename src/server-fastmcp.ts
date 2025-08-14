@@ -1,8 +1,9 @@
-import { FastMCP } from "fastmcp"
+import { FastMCP } from "@jordanburke/fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
 import { createDecoder } from "fast-jwt"
 import { executeQuery, getSchema, getPrompt, initializeDatabaseManager, DatabaseManager } from "./server-core.js"
+import { setupOAuthRoutes } from "./oauth-routes-typed.js"
 
 interface DecodedJWT {
   sub?: string
@@ -238,6 +239,11 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
       }
     },
   })
+
+  // Set up OAuth routes if enabled with static token
+  if (options.oauth?.enabled && options.oauth?.staticToken) {
+    setupOAuthRoutes(server, options.oauth)
+  }
 
   // Set up global error handlers for the FastMCP server
   process.on("uncaughtException", (error) => {
