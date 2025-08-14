@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  kuzu-mcp-oauth:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - KUZU_MCP_DATABASE_PATH=/data/kuzu-db
+      - KUZU_AUTO_INIT=true
+      - KUZU_INIT_TEMPLATE=movies
+    volumes:
+      - ./data:/data
+      - ./test/oauth-config-production.json:/config/oauth-config.json
+    command: >
+      node dist/index.js /data/kuzu-db 
+      --transport http 
+      --oauth-config /config/oauth-config.json
+      --port 3000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

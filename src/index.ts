@@ -20,6 +20,7 @@ import { promises as fsPromises } from "fs"
 import { DatabaseManager, executeQuery, getSchema, getPrompt, initializeDatabaseManager } from "./server-core.js"
 import { createFastMCPServer } from "./server-fastmcp.js"
 import { startWebServer } from "./web-server.js"
+import { startOAuthServer } from "./oauth-server.js"
 
 // Global database manager (only used for stdio transport)
 let dbManager: DatabaseManager | null = null
@@ -361,11 +362,16 @@ async function main(): Promise<void> {
   const transport = options.transport || "stdio"
 
   if (transport === "http") {
+    // If OAuth is configured with static token, use wrapper server
+    const useOAuthWrapper = oauthConfig?.enabled && oauthConfig?.staticToken
+    const mcpPort = useOAuthWrapper ? (options.port || 3000) + 100 : options.port || 3000
+    const publicPort = options.port || 3000
+
     // Create FastMCP HTTP server with shared database manager
     const { server: fastMCPServer, dbManager: sharedDbManager } = createFastMCPServer({
       databasePath: options.databasePath,
       isReadOnly: options.readonly || process.env.KUZU_READ_ONLY === "true",
-      port: options.port,
+      port: mcpPort,
       endpoint: options.endpoint,
       oauth: oauthConfig,
     })
@@ -374,12 +380,21 @@ async function main(): Promise<void> {
     await fastMCPServer.start({
       transportType: "httpStream",
       httpStream: {
-        port: options.port || 3000,
+        port: mcpPort,
         endpoint: (options.endpoint || "/mcp") as `/${string}`,
       },
     })
 
-    console.error(`✓ FastMCP server running on http://0.0.0.0:${options.port || 3000}${options.endpoint || "/mcp"}`)
+    if (useOAuthWrapper && oauthConfig) {
+      // Start OAuth wrapper server that proxies to FastMCP
+      startOAuthServer(oauthConfig, mcpPort, publicPort)
+      console.error(`✓ OAuth-enabled MCP server running on http://0.0.0.0:${publicPort}`)
+      console.error(`  - MCP endpoint: http://0.0.0.0:${publicPort}${options.endpoint || "/mcp"}`)
+      console.error(`  - OAuth authorize: http://0.0.0.0:${publicPort}/oauth/authorize`)
+      console.error(`  - OAuth token: http://0.0.0.0:${publicPort}/oauth/token`)
+    } else {
+      console.error(`✓ FastMCP server running on http://0.0.0.0:${publicPort}${options.endpoint || "/mcp"}`)
+    }
     console.error("🔌 Connect with StreamableHTTPClientTransport")
 
     // Start web UI server (enabled by default for HTTP transport, can be disabled with KUZU_WEB_UI_ENABLED=false)
