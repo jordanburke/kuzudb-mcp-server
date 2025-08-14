@@ -170,8 +170,8 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
     return res.json(mockJWKS)
   })
 
-  // OpenID Configuration Discovery
-  app.get("/.well-known/openid-configuration", (req: express.Request, res: express.Response) => {
+  // OpenID Configuration Discovery - Multiple paths for compatibility
+  const openidConfigHandler = (req: express.Request, res: express.Response): express.Response => {
     const protocol = req.get("x-forwarded-proto") || req.protocol
     const host = req.get("host")
     const baseUrl = `${protocol}://${host}`
@@ -191,10 +191,14 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
       claims_supported: ["sub", "email", "name"],
       code_challenge_methods_supported: ["S256", "plain"],
     })
-  })
+  }
+
+  // Register OpenID configuration at multiple paths
+  app.get("/.well-known/openid-configuration", openidConfigHandler)
+  app.get("/mcp/.well-known/openid-configuration", openidConfigHandler)
 
   // OAuth Authorization Server Metadata (RFC 8414)
-  app.get("/.well-known/oauth-authorization-server", (req: express.Request, res: express.Response) => {
+  const oauthServerMetadataHandler = (req: express.Request, res: express.Response): express.Response => {
     const protocol = req.get("x-forwarded-proto") || req.protocol
     const host = req.get("host")
     const baseUrl = `${protocol}://${host}`
@@ -212,7 +216,11 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
       code_challenge_methods_supported: ["S256", "plain"],
       service_documentation: "https://github.com/jordanburke/kuzudb-mcp-server",
     })
-  })
+  }
+
+  // Register OAuth server metadata at multiple paths
+  app.get("/.well-known/oauth-authorization-server", oauthServerMetadataHandler)
+  app.get("/mcp/.well-known/oauth-authorization-server", oauthServerMetadataHandler)
 
   // Proxy all other requests to the MCP server
   app.use(
