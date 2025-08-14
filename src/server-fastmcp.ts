@@ -85,6 +85,29 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
           return Promise.resolve({})
         }
 
+        // Check if this is a public OAuth discovery endpoint
+        const url = request.url || ""
+        console.error(`🔍 Auth check for URL: ${url}, method: ${request.method}`)
+        const publicPaths = [
+          "/.well-known/openid-configuration",
+          "/.well-known/oauth-authorization-server",
+          "/.well-known/jwks.json",
+          "/mcp/.well-known/openid-configuration",
+          "/mcp/.well-known/oauth-authorization-server",
+          "/oauth/jwks",
+          "/oauth/authorize",
+          "/oauth/token",
+          "/oauth/register",
+          "/health",
+        ]
+
+        // Allow public paths without authentication
+        const isPublicPath = publicPaths.some((path) => url.startsWith(path))
+        if (isPublicPath) {
+          console.error(`🔓 Allowing public access to: ${url}`)
+          return Promise.resolve({})
+        }
+
         const authHeader = request.headers.authorization
         if (!authHeader?.startsWith("Bearer ")) {
           throw new Error("Missing or invalid authorization header")
