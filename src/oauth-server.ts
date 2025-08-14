@@ -55,7 +55,8 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     if (req.method === "OPTIONS") {
-      return res.sendStatus(200)
+      res.sendStatus(200)
+      return
     }
     next()
   })
