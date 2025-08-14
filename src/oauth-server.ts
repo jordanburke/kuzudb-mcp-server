@@ -127,6 +127,31 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
   app.get("/oauth/authorize", handleAuthorize)
   app.post("/oauth/authorize", handleAuthorize)
 
+  // OAuth Dynamic Client Registration Endpoint (RFC 7591)
+  app.post("/oauth/register", (req: express.Request, res: express.Response) => {
+    // For static auth, we accept any client registration
+    // and return a client_id and client_secret (though we don't validate them)
+    const clientId = `client-${randomBytes(8).toString("hex")}`
+    const clientSecret = randomBytes(16).toString("hex")
+
+    const body = req.body as Record<string, unknown>
+
+    const registrationResponse = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_secret_expires_at: 0, // Never expires
+      redirect_uris: body.redirect_uris || ["http://localhost:6274/oauth/callback"],
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      client_name: body.client_name || "MCP Inspector",
+      token_endpoint_auth_method: "client_secret_post",
+      scope: body.scope || "read write",
+    }
+
+    return res.status(201).json(registrationResponse)
+  })
+
   // OAuth Token Endpoint
   app.post("/oauth/token", (req: express.Request, res: express.Response) => {
     const { grant_type, code, redirect_uri } = req.body as TokenBody
@@ -203,6 +228,7 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
       token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic", "none"],
       claims_supported: ["sub", "email", "name"],
       code_challenge_methods_supported: ["S256", "plain"],
+      registration_endpoint: `${baseUrl}/oauth/register`,
     })
   }
 
@@ -227,6 +253,7 @@ export function createOAuthServer(oauth: OAuthConfig, mcpPort: number): Express 
       scopes_supported: ["read", "write", "admin"],
       token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic", "none"],
       code_challenge_methods_supported: ["S256", "plain"],
+      registration_endpoint: `${baseUrl}/oauth/register`,
       service_documentation: "https://github.com/jordanburke/kuzudb-mcp-server",
     })
   }
