@@ -17,8 +17,7 @@ import * as path from "path"
 import * as fs from "fs"
 import { promises as fsPromises } from "fs"
 import { DatabaseManager, executeQuery, getSchema, getPrompt, initializeDatabaseManager } from "./server-core.js"
-import { createFastMCPServer } from "./server-fastmcp.js"
-import { startWebServer } from "./web-server.js"
+import { createFastMCPServer, OAuthConfig } from "./server-fastmcp.js"
 
 // Global database manager (only used for stdio transport)
 let dbManager: DatabaseManager | null = null
@@ -344,12 +343,32 @@ async function main(): Promise<void> {
   const transport = options.transport || "stdio"
 
   if (transport === "http") {
+    // Load OAuth configuration from environment variables
+    let oauthConfig: OAuthConfig | undefined
+    if (process.env.KUZU_OAUTH_ENABLED === "true") {
+      oauthConfig = {
+        enabled: true,
+        staticToken: process.env.KUZU_OAUTH_TOKEN || "default-static-token",
+        staticUser: {
+          userId: process.env.KUZU_OAUTH_USER_ID || "static-user",
+          email: process.env.KUZU_OAUTH_USER_EMAIL || "user@example.com",
+          scope: process.env.KUZU_OAUTH_USER_SCOPE || "read write",
+        },
+        issuer: process.env.KUZU_OAUTH_ISSUER || `http://localhost:${options.port || 3000}`,
+      }
+
+      console.error("🔐 OAuth enabled with static token authentication")
+      console.error(`   Token: ${oauthConfig.staticToken?.substring(0, 8) || "not-set"}...`)
+      console.error(`   User: ${oauthConfig.staticUser?.userId || "not-set"}`)
+    }
+
     // Create FastMCP HTTP server with shared database manager
-    const { server: fastMCPServer, dbManager: sharedDbManager } = createFastMCPServer({
+    const { server: fastMCPServer } = createFastMCPServer({
       databasePath: options.databasePath,
       isReadOnly: options.readonly || process.env.KUZU_READ_ONLY === "true",
       port: options.port,
       endpoint: options.endpoint,
+      oauth: oauthConfig,
     })
 
     // Start FastMCP server
@@ -363,29 +382,6 @@ async function main(): Promise<void> {
 
     console.error(`✓ FastMCP server running on http://0.0.0.0:${options.port || 3000}${options.endpoint || "/mcp"}`)
     console.error("🔌 Connect with StreamableHTTPClientTransport")
-
-    // Start web UI server (enabled by default for HTTP transport, can be disabled with KUZU_WEB_UI_ENABLED=false)
-    const webUIEnabled = process.env.KUZU_WEB_UI_ENABLED !== "false"
-    if (webUIEnabled) {
-      const webPort = parseInt(process.env.KUZU_WEB_UI_PORT || "3001")
-      const authUser = process.env.KUZU_WEB_UI_AUTH_USER
-      const authPassword = process.env.KUZU_WEB_UI_AUTH_PASSWORD
-
-      try {
-        startWebServer({
-          port: webPort,
-          dbManager: sharedDbManager,
-          databasePath: options.databasePath,
-          isReadOnly: options.readonly || process.env.KUZU_READ_ONLY === "true",
-          enableAuth: !!(authUser && authPassword),
-          authUser,
-          authPassword,
-        })
-      } catch (error) {
-        console.error("❌ Failed to start web UI server:", error)
-        console.error("Continuing without web UI...")
-      }
-    }
   } else {
     // Start stdio server (default)
     // We already checked that databasePath exists above

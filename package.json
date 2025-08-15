@@ -64,7 +64,7 @@
     "@types/express": "^4.17.23",
     "@types/multer": "^1.4.13",
     "express": "^4.21.2",
-    "fastmcp": "^3.14.4",
+    "@jordanburke/fastmcp": "1.0.1",
     "kuzu": "0.11.1",
     "multer": "^2.0.2",
     "zod": "^4.0.17"

@@ -1,25 +1,52 @@
-import { FastMCP } from "fastmcp"
+import { FastMCP } from "@jordanburke/fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
 import { executeQuery, getSchema, getPrompt, initializeDatabaseManager, DatabaseManager } from "./server-core.js"
+import { randomBytes } from "crypto"
+import { URL, URLSearchParams } from "url"
+import { getWebUIHTML } from "./web-ui.js"
+import { getDatabaseInfo } from "./backup-utils.js"
+
+export interface OAuthConfig {
+  enabled: boolean
+  staticToken?: string
+  staticUser?: {
+    userId: string
+    email?: string
+    scope?: string
+  }
+  issuer?: string
+}
 
 export interface FastMCPServerOptions {
   databasePath: string
   isReadOnly: boolean
   port?: number
   endpoint?: string
+  oauth?: OAuthConfig
 }
 
-export function createFastMCPServer(options: FastMCPServerOptions): { server: FastMCP; dbManager: DatabaseManager } {
+export function createFastMCPServer(options: FastMCPServerOptions): {
+  server: FastMCP<any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  dbManager: DatabaseManager
+} {
   console.error("🚀 Initializing FastMCP server...")
 
   // Initialize database
   const dbManager = initializeDatabaseManager(options.databasePath, options.isReadOnly)
 
-  // Create FastMCP server
-  const server = new FastMCP({
+  // Create FastMCP server configuration
+  type AuthSession = {
+    userId: string
+    email: string
+    scope: string
+    [key: string]: unknown // Allow additional properties
+  }
+
+  // Build server configuration with OAuth if enabled
+  const baseConfig = {
     name: "kuzu",
-    version: "0.1.0",
+    version: "0.1.0" as const,
     health: {
       enabled: true,
       path: "/health",
@@ -33,7 +60,49 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
         timestamp: new Date().toISOString(),
       }),
     },
-  })
+  }
+
+  // Create server with or without OAuth
+  const server = options.oauth?.enabled
+    ? new FastMCP<AuthSession>({
+        ...baseConfig,
+        oauth: {
+          enabled: true,
+          authorizationServer: {
+            issuer: options.oauth.issuer || `http://localhost:${options.port || 3000}`,
+            authorizationEndpoint: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/authorize`,
+            tokenEndpoint: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/token`,
+            jwksUri: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/jwks`,
+            responseTypesSupported: ["code"],
+          },
+          protectedResource: {
+            resource: "mcp://kuzudb-server",
+            authorizationServers: [options.oauth.issuer || `http://localhost:${options.port || 3000}`],
+          },
+        },
+        authenticate: (request) => {
+          const authHeader = request.headers?.authorization
+
+          if (!authHeader?.startsWith("Bearer ")) {
+            throw new Error("Missing or invalid authorization header")
+          }
+
+          const token = authHeader.slice(7) // Remove 'Bearer ' prefix
+
+          // Validate against static token
+          if (token !== options.oauth?.staticToken) {
+            throw new Error("Invalid token")
+          }
+
+          // Return user info from static config - wrap in Promise for sync function
+          return Promise.resolve({
+            userId: options.oauth?.staticUser?.userId || "static-user",
+            email: options.oauth?.staticUser?.email || "",
+            scope: options.oauth?.staticUser?.scope || "read write",
+          })
+        },
+      })
+    : new FastMCP(baseConfig)
 
   // Add query tool
   server.addTool({
@@ -103,6 +172,243 @@ export function createFastMCPServer(options: FastMCPServerOptions): { server: Fa
       }
     },
   })
+
+  // Add OAuth flow endpoints if OAuth is enabled
+  if (options.oauth?.enabled) {
+    // Store for authorization codes (in memory, cleared on restart)
+    const authorizationCodes = new Map<
+      string,
+      {
+        createdAt: number
+        redirectUri?: string
+      }
+    >()
+
+    // Clean up old codes every minute
+    setInterval(() => {
+      const now = Date.now()
+      for (const [code, data] of authorizationCodes.entries()) {
+        if (now - data.createdAt > 600000) {
+          // 10 minutes
+          authorizationCodes.delete(code)
+        }
+      }
+    }, 60000)
+
+    // OAuth Authorization Endpoint
+    server.addRoute(
+      "GET",
+      "/oauth/authorize",
+      (req, res) => {
+        const params = req.query
+        const responseType = params.response_type as string
+        const redirectUri = params.redirect_uri as string
+        const state = params.state as string
+
+        if (responseType !== "code") {
+          res.status(400).json({
+            error: "unsupported_response_type",
+            error_description: "Only 'code' response type is supported",
+          })
+          return
+        }
+
+        if (!redirectUri) {
+          res.status(400).json({
+            error: "invalid_request",
+            error_description: "redirect_uri is required",
+          })
+          return
+        }
+
+        // Generate authorization code
+        const code = randomBytes(16).toString("hex")
+        authorizationCodes.set(code, {
+          createdAt: Date.now(),
+          redirectUri,
+        })
+
+        // Immediately redirect with code (no user interaction needed for static auth)
+        const redirectUrl = new URL(redirectUri)
+        redirectUrl.searchParams.set("code", code)
+        if (state) {
+          redirectUrl.searchParams.set("state", state)
+        }
+
+        res.status(302).setHeader("Location", redirectUrl.toString()).end()
+      },
+      { public: true },
+    )
+
+    // OAuth Token Endpoint
+    server.addRoute(
+      "POST",
+      "/oauth/token",
+      async (req, res) => {
+        const body = await req.text()
+        const params = new URLSearchParams(body)
+        const grantType = params.get("grant_type")
+        const code = params.get("code")
+        const redirectUri = params.get("redirect_uri")
+
+        if (grantType !== "authorization_code") {
+          res.status(400).json({
+            error: "unsupported_grant_type",
+            error_description: "Only 'authorization_code' grant type is supported",
+          })
+          return
+        }
+
+        const codeData = authorizationCodes.get(code || "")
+        if (!codeData) {
+          res.status(400).json({
+            error: "invalid_grant",
+            error_description: "Invalid or expired authorization code",
+          })
+          return
+        }
+
+        // Validate redirect_uri matches
+        if (codeData.redirectUri && codeData.redirectUri !== redirectUri) {
+          res.status(400).json({
+            error: "invalid_grant",
+            error_description: "redirect_uri mismatch",
+          })
+          return
+        }
+
+        // Remove used code
+        authorizationCodes.delete(code!)
+
+        // Return the static token
+        res.json({
+          access_token: options.oauth?.staticToken,
+          token_type: "Bearer",
+          expires_in: 31536000, // 1 year
+          scope: options.oauth?.staticUser?.scope || "read write",
+          refresh_token: options.oauth?.staticToken,
+        })
+      },
+      { public: true },
+    )
+
+    // JWKS Endpoint (mock for static auth)
+    server.addRoute(
+      "GET",
+      "/oauth/jwks",
+      (_req, res) => {
+        res.json({
+          keys: [
+            {
+              kty: "RSA",
+              use: "sig",
+              kid: "static-key-1",
+              alg: "RS256",
+              n: "xGOr-H7A-PWG3z" + randomBytes(32).toString("base64url"),
+              e: "AQAB",
+            },
+          ],
+        })
+      },
+      { public: true },
+    )
+
+    // Dynamic Client Registration (accept any client)
+    server.addRoute(
+      "POST",
+      "/oauth/register",
+      (_req, res) => {
+        const clientId = `client-${randomBytes(8).toString("hex")}`
+        const clientSecret = randomBytes(16).toString("hex")
+
+        res.status(201).json({
+          client_id: clientId,
+          client_secret: clientSecret,
+          client_id_issued_at: Math.floor(Date.now() / 1000),
+          client_secret_expires_at: 0, // Never expires
+          grant_types: ["authorization_code"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "client_secret_post",
+        })
+      },
+      { public: true },
+    )
+
+    console.error("✓ OAuth flow endpoints added:")
+    console.error(`    - Authorization: http://localhost:${options.port || 3000}/oauth/authorize`)
+    console.error(`    - Token: http://localhost:${options.port || 3000}/oauth/token`)
+    console.error(`    - JWKS: http://localhost:${options.port || 3000}/oauth/jwks`)
+    console.error(`    - Registration: http://localhost:${options.port || 3000}/oauth/register`)
+  }
+
+  // Add Admin UI routes
+  const webUIEnabled = process.env.KUZU_WEB_UI_ENABLED !== "false"
+  if (webUIEnabled) {
+    // Redirect root to admin
+    server.addRoute(
+      "GET",
+      "/",
+      (_req, res) => {
+        res.status(302).setHeader("Location", "/admin").end()
+      },
+      { public: true },
+    )
+
+    // Serve the admin UI
+    server.addRoute(
+      "GET",
+      "/admin",
+      (_req, res) => {
+        const html = getWebUIHTML({
+          databasePath: options.databasePath,
+          isReadOnly: options.isReadOnly,
+          version: "0.11.10",
+        })
+        res.send(html)
+      },
+      { public: true },
+    )
+
+    // Database info API endpoint
+    server.addRoute(
+      "GET",
+      "/api/info",
+      async (_req, res) => {
+        try {
+          const info = await getDatabaseInfo(options.databasePath)
+          res.json({
+            ...info,
+            isReadOnly: options.isReadOnly,
+            connected: !!dbManager.conn,
+          })
+        } catch (error) {
+          console.error("Error getting database info:", error)
+          res.status(500).json({ error: "Failed to get database info" })
+        }
+      },
+      { public: true },
+    )
+
+    // Health check for admin UI
+    server.addRoute(
+      "GET",
+      "/api/health",
+      (_req, res) => {
+        res.json({
+          status: "healthy",
+          service: "kuzudb-admin-ui",
+          database: options.databasePath,
+          readonly: options.isReadOnly,
+          timestamp: new Date().toISOString(),
+        })
+      },
+      { public: true },
+    )
+
+    console.error("✓ Admin UI added:")
+    console.error(`    - Web UI: http://localhost:${options.port || 3000}/admin`)
+    console.error(`    - API: http://localhost:${options.port || 3000}/api/*`)
+  }
 
   // Set up global error handlers for the FastMCP server
   process.on("uncaughtException", (error) => {
