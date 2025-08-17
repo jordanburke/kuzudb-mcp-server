@@ -5,7 +5,10 @@ import { executeQuery, getSchema, getPrompt, initializeDatabaseManager, Database
 import { randomBytes } from "crypto"
 import { URL, URLSearchParams } from "url"
 import { getWebUIHTML } from "./web-ui.js"
-import { getDatabaseInfo } from "./backup-utils.js"
+import { getDatabaseInfo, createSimpleArchive, exportDatabase } from "./backup-utils.js"
+import * as os from "os"
+import * as path from "path"
+import * as fs from "fs/promises"
 
 export interface OAuthConfig {
   enabled: boolean
@@ -400,6 +403,87 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           database: options.databasePath,
           readonly: options.isReadOnly,
           timestamp: new Date().toISOString(),
+        })
+      },
+      { public: true },
+    )
+
+    // Download backup endpoint
+    server.addRoute(
+      "GET",
+      "/api/backup",
+      async (_req, res) => {
+        try {
+          // Create a simple archive in memory
+          const archive = await createSimpleArchive(options.databasePath)
+
+          // Set headers for download
+          const filename = `kuzu-backup-${new Date().toISOString().slice(0, 10)}.kuzu`
+          res.setHeader("Content-Type", "application/octet-stream")
+          res.setHeader("Content-Disposition", `attachment; filename="${filename}"`)
+          res.setHeader("Content-Length", archive.length.toString())
+
+          // Send the archive
+          res.send(archive)
+        } catch (error) {
+          console.error("Error creating backup:", error)
+          res.status(500).json({ error: "Failed to create backup" })
+        }
+      },
+      { public: true },
+    )
+
+    // Export database endpoint
+    server.addRoute(
+      "GET",
+      "/api/export",
+      async (_req, res) => {
+        try {
+          const exportDir = path.join(os.tmpdir(), `kuzu-export-${Date.now()}`)
+
+          // Export database
+          await exportDatabase(dbManager.conn, exportDir)
+
+          // TODO: Create a ZIP of the exported files
+          // For now, we'll just return a message
+          res.json({
+            success: true,
+            message: "Export functionality coming soon. Use EXPORT DATABASE command directly for now.",
+            exportPath: exportDir,
+          })
+
+          // Clean up export directory after some time
+          setTimeout(() => {
+            void (async () => {
+              try {
+                await fs.rm(exportDir, { recursive: true, force: true })
+              } catch {
+                // Ignore cleanup errors
+              }
+            })()
+          }, 60000) // Clean up after 1 minute
+        } catch (error) {
+          console.error("Error exporting database:", error)
+          res.status(500).json({ error: "Failed to export database: " + (error as Error).message })
+        }
+      },
+      { public: true },
+    )
+
+    // Restore backup endpoint (simplified - just return not implemented for now)
+    server.addRoute(
+      "POST",
+      "/api/restore",
+      (_req, res) => {
+        if (options.isReadOnly) {
+          res.status(403).json({ error: "Database is in read-only mode" })
+          return
+        }
+
+        // TODO: Implement full restore functionality with multipart upload
+        res.status(501).json({
+          error: "Restore functionality not yet implemented in single-port mode",
+          message: "Please use the command-line tools for restore operations",
         })
       },
       { public: true },
