@@ -2,7 +2,7 @@ import { FastMCP } from "@jordanburke/fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
 import { executeQuery, getSchema, getPrompt, initializeDatabaseManager, DatabaseManager } from "./server-core.js"
-import { randomBytes } from "crypto"
+import { randomBytes, createHash } from "crypto"
 import { URL, URLSearchParams } from "url"
 import { getWebUIHTML } from "./web-ui.js"
 import { getDatabaseInfo, createSimpleArchive, exportDatabase } from "./backup-utils.js"
@@ -77,7 +77,11 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             authorizationEndpoint: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/authorize`,
             tokenEndpoint: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/token`,
             jwksUri: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/jwks`,
+            registrationEndpoint: `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/oauth/register`,
             responseTypesSupported: ["code"],
+            grantTypesSupported: ["authorization_code"],
+            tokenEndpointAuthMethodsSupported: ["client_secret_post", "client_secret_basic"],
+            codeChallengeMethodsSupported: ["S256", "plain"],
           },
           protectedResource: {
             resource:
@@ -188,6 +192,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
       {
         createdAt: number
         redirectUri?: string
+        codeChallenge?: string
+        codeChallengeMethod?: string
       }
     >()
 
@@ -211,6 +217,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         const responseType = params.response_type as string
         const redirectUri = params.redirect_uri as string
         const state = params.state as string
+        const codeChallenge = params.code_challenge as string
+        const codeChallengeMethod = params.code_challenge_method as string
 
         if (responseType !== "code") {
           res.status(400).json({
@@ -228,11 +236,24 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           return
         }
 
+        // Validate PKCE parameters if present
+        if (codeChallenge) {
+          if (!codeChallengeMethod || !["S256", "plain"].includes(codeChallengeMethod)) {
+            res.status(400).json({
+              error: "invalid_request",
+              error_description: "Invalid code_challenge_method. Only 'S256' and 'plain' are supported",
+            })
+            return
+          }
+        }
+
         // Generate authorization code
         const code = randomBytes(16).toString("hex")
         authorizationCodes.set(code, {
           createdAt: Date.now(),
           redirectUri,
+          codeChallenge,
+          codeChallengeMethod,
         })
 
         // Immediately redirect with code (no user interaction needed for static auth)
@@ -257,6 +278,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         const grantType = params.get("grant_type")
         const code = params.get("code")
         const redirectUri = params.get("redirect_uri")
+        const codeVerifier = params.get("code_verifier")
 
         if (grantType !== "authorization_code") {
           res.status(400).json({
@@ -282,6 +304,36 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             error_description: "redirect_uri mismatch",
           })
           return
+        }
+
+        // Validate PKCE if code_challenge was provided
+        if (codeData.codeChallenge) {
+          if (!codeVerifier) {
+            res.status(400).json({
+              error: "invalid_grant",
+              error_description: "code_verifier is required when code_challenge was used",
+            })
+            return
+          }
+
+          let expectedChallenge: string
+          if (codeData.codeChallengeMethod === "S256") {
+            expectedChallenge = createHash("sha256")
+              .update(codeVerifier)
+              .digest()
+              .toString("base64url")
+          } else {
+            // 'plain' method
+            expectedChallenge = codeVerifier
+          }
+
+          if (expectedChallenge !== codeData.codeChallenge) {
+            res.status(400).json({
+              error: "invalid_grant",
+              error_description: "Invalid code_verifier",
+            })
+            return
+          }
         }
 
         // Remove used code
@@ -324,19 +376,68 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     server.addRoute(
       "POST",
       "/oauth/register",
-      (_req, res) => {
-        const clientId = `client-${randomBytes(8).toString("hex")}`
-        const clientSecret = randomBytes(16).toString("hex")
+      async (req, res) => {
+        try {
+          // Parse the request body to get client registration info
+          let registrationRequest: any = {}
+          
+          try {
+            // Try to get JSON body directly from req.body if available
+            if (req.body && typeof req.body === 'object') {
+              registrationRequest = req.body
+              console.log("📝 Using direct req.body:", JSON.stringify(registrationRequest, null, 2))
+            } else {
+              // Fallback to text parsing
+              const body = await req.text()
+              console.log("📝 Raw request body from text():", body)
+              console.log("📝 Request content-type:", req.headers?.["content-type"])
+              
+              if (body && body !== '[object Object]') {
+                try {
+                  registrationRequest = JSON.parse(body)
+                  console.log("📝 Parsed JSON registration request:", JSON.stringify(registrationRequest, null, 2))
+                } catch (e) {
+                  // If not JSON, treat as form-encoded (though DCR usually uses JSON)
+                  registrationRequest = Object.fromEntries(new URLSearchParams(body))
+                  console.log("📝 Parsed form-encoded registration request:", registrationRequest)
+                  console.log("📝 JSON parse error:", e)
+                }
+              }
+            }
+          } catch (error) {
+            console.error("📝 Error parsing request body:", error)
+          }
 
-        res.status(201).json({
-          client_id: clientId,
-          client_secret: clientSecret,
-          client_id_issued_at: Math.floor(Date.now() / 1000),
-          client_secret_expires_at: 0, // Never expires
-          grant_types: ["authorization_code"],
-          response_types: ["code"],
-          token_endpoint_auth_method: "client_secret_post",
-        })
+          const clientId = `client-${randomBytes(8).toString("hex")}`
+          const clientSecret = randomBytes(16).toString("hex")
+
+          // Return the registered client with the provided redirect URIs
+          const response: any = {
+            client_id: clientId,
+            client_secret: clientSecret,
+            client_id_issued_at: Math.floor(Date.now() / 1000),
+            client_secret_expires_at: 0, // Never expires
+            grant_types: registrationRequest.grant_types || ["authorization_code"],
+            response_types: registrationRequest.response_types || ["code"],
+            redirect_uris: registrationRequest.redirect_uris || [],
+            token_endpoint_auth_method: registrationRequest.token_endpoint_auth_method || "client_secret_post",
+          }
+
+          // Add any other fields the client requested
+          if (registrationRequest.client_name) {
+            response.client_name = registrationRequest.client_name
+          }
+          if (registrationRequest.scope) {
+            response.scope = registrationRequest.scope
+          }
+
+          res.status(201).json(response)
+        } catch (error) {
+          res.status(400).json({
+            error: "invalid_client_metadata",
+            error_description: "Invalid client registration request: " + (error instanceof Error ? error.message : String(error))
+          })
+        }
       },
       { public: true },
     )
