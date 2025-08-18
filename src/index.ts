@@ -346,20 +346,43 @@ async function main(): Promise<void> {
     // Load OAuth configuration from environment variables
     let oauthConfig: OAuthConfig | undefined
     if (process.env.KUZU_OAUTH_ENABLED === "true") {
-      oauthConfig = {
-        enabled: true,
-        staticToken: process.env.KUZU_OAUTH_TOKEN || "default-static-token",
-        staticUser: {
-          userId: process.env.KUZU_OAUTH_USER_ID || "static-user",
-          email: process.env.KUZU_OAUTH_USER_EMAIL || "user@example.com",
-          scope: process.env.KUZU_OAUTH_USER_SCOPE || "read write",
-        },
-        issuer: process.env.KUZU_OAUTH_ISSUER || `http://localhost:${options.port || 3000}`,
+      const username = process.env.KUZU_OAUTH_USERNAME
+      const password = process.env.KUZU_OAUTH_PASSWORD
+      
+      if (!username || !password) {
+        console.error("❌ OAuth enabled but KUZU_OAUTH_USERNAME and KUZU_OAUTH_PASSWORD are required")
+        process.exit(1)
       }
 
-      console.error("🔐 OAuth enabled with static token authentication")
-      console.error(`   Token: ${oauthConfig.staticToken?.substring(0, 8) || "not-set"}...`)
-      console.error(`   User: ${oauthConfig.staticUser?.userId || "not-set"}`)
+      oauthConfig = {
+        enabled: true,
+        username,
+        password,
+        userId: process.env.KUZU_OAUTH_USER_ID || username,
+        email: process.env.KUZU_OAUTH_EMAIL,
+        issuer: process.env.KUZU_OAUTH_ISSUER || `http://localhost:${options.port || 3000}`,
+        resource: process.env.KUZU_OAUTH_RESOURCE,
+      }
+
+      console.error("🔐 OAuth enabled with username/password authentication")
+      console.error(`   Username: ${oauthConfig.username}`)
+      console.error(`   User ID: ${oauthConfig.userId}`)
+      console.error("   ✓ Login form will be shown at authorization endpoint")
+    }
+
+    // Load Basic Auth configuration from environment variables
+    let basicAuthConfig: { username: string; password: string; userId?: string; email?: string } | undefined
+    if (process.env.KUZU_BASIC_AUTH_USERNAME && process.env.KUZU_BASIC_AUTH_PASSWORD) {
+      basicAuthConfig = {
+        username: process.env.KUZU_BASIC_AUTH_USERNAME,
+        password: process.env.KUZU_BASIC_AUTH_PASSWORD,
+        userId: process.env.KUZU_BASIC_AUTH_USER_ID,
+        email: process.env.KUZU_BASIC_AUTH_EMAIL,
+      }
+
+      console.error("🔐 Basic authentication enabled")
+      console.error(`   Username: ${basicAuthConfig.username}`)
+      console.error(`   User ID: ${basicAuthConfig.userId || basicAuthConfig.username}`)
     }
 
     // Create FastMCP HTTP server with shared database manager
@@ -369,6 +392,7 @@ async function main(): Promise<void> {
       port: options.port,
       endpoint: options.endpoint,
       oauth: oauthConfig,
+      basicAuth: basicAuthConfig,
     })
 
     // Start FastMCP server
