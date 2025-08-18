@@ -19,6 +19,7 @@ export interface OAuthConfig {
     scope?: string
   }
   issuer?: string
+  resource?: string
 }
 
 export interface FastMCPServerOptions {
@@ -79,7 +80,10 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             responseTypesSupported: ["code"],
           },
           protectedResource: {
-            resource: "mcp://kuzudb-server",
+            resource:
+              process.env.KUZU_OAUTH_RESOURCE ||
+              options.oauth.resource ||
+              `${options.oauth.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
             authorizationServers: [options.oauth.issuer || `http://localhost:${options.port || 3000}`],
           },
         },
