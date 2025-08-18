@@ -348,7 +348,7 @@ async function main(): Promise<void> {
     if (process.env.KUZU_OAUTH_ENABLED === "true") {
       const username = process.env.KUZU_OAUTH_USERNAME
       const password = process.env.KUZU_OAUTH_PASSWORD
-      
+
       if (!username || !password) {
         console.error("❌ OAuth enabled but KUZU_OAUTH_USERNAME and KUZU_OAUTH_PASSWORD are required")
         process.exit(1)

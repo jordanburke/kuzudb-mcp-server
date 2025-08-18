@@ -21,6 +21,28 @@ export interface OAuthConfig {
   resource?: string
 }
 
+interface OAuthClientRegistrationRequest {
+  grant_types?: string[]
+  response_types?: string[]
+  redirect_uris?: string[]
+  token_endpoint_auth_method?: string
+  client_name?: string
+  scope?: string
+}
+
+interface OAuthClientRegistrationResponse {
+  client_id: string
+  client_secret: string
+  client_id_issued_at: number
+  client_secret_expires_at: number
+  grant_types: string[]
+  response_types: string[]
+  redirect_uris: string[]
+  token_endpoint_auth_method: string
+  client_name?: string
+  scope?: string
+}
+
 export interface FastMCPServerOptions {
   databasePath: string
   isReadOnly: boolean
@@ -36,22 +58,36 @@ export interface FastMCPServerOptions {
 }
 
 // JWT secret for token signing/validation
-const JWT_SECRET = process.env.KUZU_JWT_SECRET || randomBytes(32).toString('hex')
+const JWT_SECRET = process.env.KUZU_JWT_SECRET || randomBytes(32).toString("hex")
 
 // In-memory stores for OAuth flow
-const authorizationCodes = new Map<string, { 
-  createdAt: number
-  redirectUri?: string
-  codeChallenge?: string
-  codeChallengeMethod?: string
-  userId: string
-}>()
+const authorizationCodes = new Map<
+  string,
+  {
+    createdAt: number
+    redirectUri?: string
+    codeChallenge?: string
+    codeChallengeMethod?: string
+    userId: string
+  }
+>()
 
-const refreshTokens = new Map<string, {
-  createdAt: number
+const refreshTokens = new Map<
+  string,
+  {
+    createdAt: number
+    userId: string
+    email?: string
+  }
+>()
+
+// AuthSession type for FastMCP authentication
+type AuthSession = {
   userId: string
-  email?: string
-}>()
+  email: string
+  scope: string
+  [key: string]: unknown // Allow additional properties
+}
 
 export function createFastMCPServer(options: FastMCPServerOptions): {
   server: FastMCP<any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -63,12 +99,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
   const dbManager = initializeDatabaseManager(options.databasePath, options.isReadOnly)
 
   // Create FastMCP server configuration
-  type AuthSession = {
-    userId: string
-    email: string
-    scope: string
-    [key: string]: unknown // Allow additional properties
-  }
 
   // Build server configuration with OAuth if enabled
   const baseConfig = {
@@ -90,92 +120,93 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
   }
 
   // Create server with authentication (OAuth, Basic Auth, or none)
-  const server = (options.oauth?.enabled || options.basicAuth)
-    ? new FastMCP<AuthSession>({
-        ...baseConfig,
-        oauth: {
-          enabled: true,
-          authorizationServer: {
-            issuer: options.oauth?.issuer || `http://localhost:${options.port || 3000}`,
-            authorizationEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/authorize`,
-            tokenEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/token`,
-            jwksUri: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/jwks`,
-            registrationEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/register`,
-            responseTypesSupported: ["code"],
-            grantTypesSupported: ["authorization_code"],
-            tokenEndpointAuthMethodsSupported: ["client_secret_post", "client_secret_basic"],
-            codeChallengeMethodsSupported: ["S256", "plain"],
+  const server =
+    options.oauth?.enabled || options.basicAuth
+      ? new FastMCP<AuthSession>({
+          ...baseConfig,
+          oauth: {
+            enabled: true,
+            authorizationServer: {
+              issuer: options.oauth?.issuer || `http://localhost:${options.port || 3000}`,
+              authorizationEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/authorize`,
+              tokenEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/token`,
+              jwksUri: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/jwks`,
+              registrationEndpoint: `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/oauth/register`,
+              responseTypesSupported: ["code"],
+              grantTypesSupported: ["authorization_code"],
+              tokenEndpointAuthMethodsSupported: ["client_secret_post", "client_secret_basic"],
+              codeChallengeMethodsSupported: ["S256", "plain"],
+            },
+            protectedResource: {
+              resource:
+                process.env.KUZU_OAUTH_RESOURCE ||
+                options.oauth?.resource ||
+                `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
+              authorizationServers: [options.oauth?.issuer || `http://localhost:${options.port || 3000}`],
+            },
           },
-          protectedResource: {
-            resource:
-              process.env.KUZU_OAUTH_RESOURCE ||
-              options.oauth?.resource ||
-              `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
-            authorizationServers: [options.oauth?.issuer || `http://localhost:${options.port || 3000}`],
-          },
-        },
-        authenticate: (request) => {
-          const authHeader = request.headers?.authorization
+          authenticate: (request) => {
+            const authHeader = request.headers?.authorization
 
-          // Allow initial MCP discovery requests without authentication
-          // MCP Inspector and other clients need to connect first to discover OAuth capabilities
-          if (!authHeader) {
-            // For OAuth-enabled servers, we need to allow initial connections for discovery
-            // but the actual tool calls will be protected by the OAuth flow
-            if (options.oauth?.enabled) {
-              // Return a minimal session that allows discovery but will fail on actual tool use
-              return Promise.resolve({
-                userId: "unauthenticated",
-                email: "",
-                scope: "discovery", // Limited scope for discovery only
-              })
-            }
-            throw new Error("Missing authorization header")
-          }
-
-          // Handle Basic Authentication
-          if (options.basicAuth && authHeader.startsWith("Basic ")) {
-            const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8')
-            const [username, password] = credentials.split(':')
-            
-            if (username === options.basicAuth.username && password === options.basicAuth.password) {
-              return Promise.resolve({
-                userId: options.basicAuth.userId || username,
-                email: options.basicAuth.email || `${username}@example.com`,
-                scope: "read write",
-              })
-            } else {
-              throw new Error("Invalid username or password")
-            }
-          }
-
-          // Handle Bearer Token (OAuth) - Validate JWT
-          if (options.oauth?.enabled && authHeader.startsWith("Bearer ")) {
-            const token = authHeader.slice(7) // Remove 'Bearer ' prefix
-
-            try {
-              // Verify JWT token
-              const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
-              
-              if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                throw new Error("Invalid token structure")
+            // Allow initial MCP discovery requests without authentication
+            // MCP Inspector and other clients need to connect first to discover OAuth capabilities
+            if (!authHeader) {
+              // For OAuth-enabled servers, we need to allow initial connections for discovery
+              // but the actual tool calls will be protected by the OAuth flow
+              if (options.oauth?.enabled) {
+                // Return a minimal session that allows discovery but will fail on actual tool use
+                return Promise.resolve({
+                  userId: "unauthenticated",
+                  email: "",
+                  scope: "discovery", // Limited scope for discovery only
+                })
               }
-
-              // Return user info from JWT claims
-              return Promise.resolve({
-                userId: decoded.sub,
-                email: decoded.email || "",
-                scope: decoded.scope || "read write",
-              })
-            } catch (error) {
-              throw new Error("Invalid or expired token")
+              throw new Error("Missing authorization header")
             }
-          }
 
-          throw new Error("Invalid authorization header format")
-        },
-      })
-    : new FastMCP(baseConfig)
+            // Handle Basic Authentication
+            if (options.basicAuth && authHeader.startsWith("Basic ")) {
+              const credentials = Buffer.from(authHeader.slice(6), "base64").toString("utf-8")
+              const [username, password] = credentials.split(":")
+
+              if (username === options.basicAuth.username && password === options.basicAuth.password) {
+                return Promise.resolve({
+                  userId: options.basicAuth.userId || username,
+                  email: options.basicAuth.email || `${username}@example.com`,
+                  scope: "read write",
+                })
+              } else {
+                throw new Error("Invalid username or password")
+              }
+            }
+
+            // Handle Bearer Token (OAuth) - Validate JWT
+            if (options.oauth?.enabled && authHeader.startsWith("Bearer ")) {
+              const token = authHeader.slice(7) // Remove 'Bearer ' prefix
+
+              try {
+                // Verify JWT token
+                const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
+
+                if (!decoded.sub || !decoded.iat || !decoded.exp) {
+                  throw new Error("Invalid token structure")
+                }
+
+                // Return user info from JWT claims
+                return Promise.resolve({
+                  userId: decoded.sub,
+                  email: (decoded.email as string) || "",
+                  scope: (decoded.scope as string) || "read write",
+                })
+              } catch {
+                throw new Error("Invalid or expired token")
+              }
+            }
+
+            throw new Error("Invalid authorization header format")
+          },
+        })
+      : new FastMCP(baseConfig)
 
   // Add query tool
   server.addTool({
@@ -274,7 +305,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
       }
       // Clean refresh tokens (30 days)
       for (const [token, data] of refreshTokens.entries()) {
-        if (now - data.createdAt > 2592000000) { // 30 days
+        if (now - data.createdAt > 2592000000) {
+          // 30 days
           refreshTokens.delete(token)
         }
       }
@@ -340,17 +372,17 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
 <body>
     <div class="app-info">
         <h3>🔐 OAuth Authorization</h3>
-        <p><strong>Application:</strong> ${clientId || 'MCP Client'}</p>
+        <p><strong>Application:</strong> ${clientId || "MCP Client"}</p>
         <p><strong>Permissions:</strong> Read and write access to Kuzu database</p>
     </div>
     
     <form method="POST" action="/oauth/authorize">
         <input type="hidden" name="response_type" value="${responseType}">
         <input type="hidden" name="redirect_uri" value="${redirectUri}">
-        <input type="hidden" name="state" value="${state || ''}">
-        <input type="hidden" name="code_challenge" value="${codeChallenge || ''}">
-        <input type="hidden" name="code_challenge_method" value="${codeChallengeMethod || ''}">
-        <input type="hidden" name="client_id" value="${clientId || ''}">
+        <input type="hidden" name="state" value="${state || ""}">
+        <input type="hidden" name="code_challenge" value="${codeChallenge || ""}">
+        <input type="hidden" name="code_challenge_method" value="${codeChallengeMethod || ""}">
+        <input type="hidden" name="client_id" value="${clientId || ""}">
         
         <div class="form-group">
             <label for="username">Username:</label>
@@ -374,13 +406,13 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
 
     // OAuth Authorization POST - Process Login
     server.addRoute(
-      "POST", 
+      "POST",
       "/oauth/authorize",
       async (req, res) => {
         try {
           const body = await req.text()
           const params = new URLSearchParams(body)
-          
+
           const username = params.get("username")
           const password = params.get("password")
           const redirectUri = params.get("redirect_uri")
@@ -416,10 +448,10 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           }
 
           res.status(302).setHeader("Location", redirectUrl.toString()).end()
-        } catch (error) {
+        } catch {
           res.status(400).json({
             error: "invalid_request",
-            error_description: "Failed to process authorization request"
+            error_description: "Failed to process authorization request",
           })
         }
       },
@@ -452,7 +484,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           const tokenData = refreshTokens.get(refreshTokenParam)
           if (!tokenData) {
             res.status(400).json({
-              error: "invalid_grant", 
+              error: "invalid_grant",
               error_description: "Invalid or expired refresh token",
             })
             return
@@ -469,11 +501,12 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             iat: Math.floor(Date.now() / 1000),
             exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
             iss: options.oauth?.issuer || `http://localhost:${options.port || 3000}`,
-            aud: options.oauth?.resource || `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
+            aud:
+              options.oauth?.resource || `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
           }
 
-          // Generate new refresh token  
-          const newRefreshToken = randomBytes(32).toString('hex')
+          // Generate new refresh token
+          const newRefreshToken = randomBytes(32).toString("hex")
           refreshTokens.set(newRefreshToken, {
             createdAt: Date.now(),
             userId: tokenData.userId,
@@ -486,7 +519,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             access_token: accessToken,
             token_type: "Bearer",
             expires_in: 900, // 15 minutes
-            scope: "read write", 
+            scope: "read write",
             refresh_token: newRefreshToken,
           })
           return
@@ -530,10 +563,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
 
           let expectedChallenge: string
           if (codeData.codeChallengeMethod === "S256") {
-            expectedChallenge = createHash("sha256")
-              .update(codeVerifier)
-              .digest()
-              .toString("base64url")
+            expectedChallenge = createHash("sha256").update(codeVerifier).digest().toString("base64url")
           } else {
             // 'plain' method
             expectedChallenge = codeVerifier
@@ -562,8 +592,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           aud: options.oauth?.resource || `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
         }
 
-        // Generate refresh token (7 days)  
-        const refreshToken = randomBytes(32).toString('hex')
+        // Generate refresh token (7 days)
+        const refreshToken = randomBytes(32).toString("hex")
         refreshTokens.set(refreshToken, {
           createdAt: Date.now(),
           userId: codeData.userId,
@@ -574,7 +604,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
 
         res.json({
           access_token: accessToken,
-          token_type: "Bearer", 
+          token_type: "Bearer",
           expires_in: 900, // 15 minutes
           scope: "read write",
           refresh_token: refreshToken,
@@ -583,7 +613,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
       { public: true },
     )
 
-    // JWKS Endpoint - Symmetric key (HMAC) 
+    // JWKS Endpoint - Symmetric key (HMAC)
     server.addRoute(
       "GET",
       "/oauth/jwks",
@@ -612,33 +642,34 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
       async (req, res) => {
         try {
           // Parse the request body to get client registration info
-          let registrationRequest: any = {}
-          
+          let registrationRequest: OAuthClientRegistrationRequest = {}
+
           try {
             // Try to get JSON body directly from req.body if available
-            if (req.body && typeof req.body === 'object') {
-              registrationRequest = req.body
+            if (req.body && typeof req.body === "object") {
+              registrationRequest = req.body as OAuthClientRegistrationRequest
             } else {
               // Fallback to text parsing - handle FastMCP body parsing issues
               const body = await req.text()
-              if (body && body !== '[object Object]') {
+              if (body && body !== "[object Object]") {
                 try {
-                  registrationRequest = JSON.parse(body)
-                } catch (e) {
+                  registrationRequest = JSON.parse(body) as OAuthClientRegistrationRequest
+                } catch {
                   // If not JSON, treat as form-encoded (though DCR usually uses JSON)
-                  registrationRequest = Object.fromEntries(new URLSearchParams(body))
+                  const formData = Object.fromEntries(new URLSearchParams(body))
+                  registrationRequest = formData as OAuthClientRegistrationRequest
                 }
               }
             }
-          } catch (error) {
-            console.error("Error parsing request body:", error)
+          } catch (parseError) {
+            console.error("Error parsing request body:", parseError)
           }
 
           const clientId = `client-${randomBytes(8).toString("hex")}`
           const clientSecret = randomBytes(16).toString("hex")
 
           // Return the registered client with the provided redirect URIs
-          const response: any = {
+          const response: OAuthClientRegistrationResponse = {
             client_id: clientId,
             client_secret: clientSecret,
             client_id_issued_at: Math.floor(Date.now() / 1000),
@@ -661,7 +692,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         } catch (error) {
           res.status(400).json({
             error: "invalid_client_metadata",
-            error_description: "Invalid client registration request: " + (error instanceof Error ? error.message : String(error))
+            error_description:
+              "Invalid client registration request: " + (error instanceof Error ? error.message : String(error)),
           })
         }
       },
