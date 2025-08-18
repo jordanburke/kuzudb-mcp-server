@@ -421,6 +421,11 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           const codeChallengeMethod = params.get("code_challenge_method")
 
           // Validate credentials
+          console.error(`🔐 Login attempt - Username: '${username}', Expected: '${options.oauth?.username}'`)
+          console.error(
+            `🔐 Login attempt - Password length: ${password?.length}, Expected length: ${options.oauth?.password?.length}`,
+          )
+
           if (username !== options.oauth?.username || password !== options.oauth?.password) {
             const errorForm = `
 <!DOCTYPE html>
