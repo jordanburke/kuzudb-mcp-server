@@ -11,18 +11,9 @@ import * as os from "os"
 import * as path from "path"
 import * as fs from "fs/promises"
 
-// Define a custom error class that can carry HTTP response information
-class HttpResponseError extends Error {
-  constructor(
-    public body: string,
-    public status: number,
-    public statusText: string,
-    public headers: Record<string, string>,
-  ) {
-    super(`HTTP ${status}: ${statusText}`)
-    this.name = "HttpResponseError"
-  }
-}
+// Node.js 18+ has global Response, but TypeScript needs explicit typing
+// Use globalThis to access it in a type-safe way
+const { Response } = globalThis
 
 export interface OAuthConfig {
   enabled: boolean
@@ -166,30 +157,36 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             if (!authHeader) {
               if (options.oauth?.enabled) {
                 // Return HTTP 401 with WWW-Authenticate header for proper OAuth discovery
-                throw new HttpResponseError(
+                // eslint-disable-next-line @typescript-eslint/only-throw-error
+                throw new Response(
                   JSON.stringify({
                     error: "unauthorized",
                     error_description: "Authorization required. Please authenticate via OAuth.",
                   }),
-                  401,
-                  "Unauthorized",
                   {
-                    "Content-Type": "application/json",
-                    "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                    },
                   },
                 )
               }
 
               // For non-OAuth servers, also require some form of auth
-              throw new HttpResponseError(
+              // eslint-disable-next-line @typescript-eslint/only-throw-error
+              throw new Response(
                 JSON.stringify({
                   error: "unauthorized",
                   error_description: "Authorization required.",
                 }),
-                401,
-                "Unauthorized",
                 {
-                  "Content-Type": "application/json",
+                  status: 401,
+                  statusText: "Unauthorized",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
                 },
               )
             }
@@ -206,16 +203,19 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: "read write",
                 })
               } else {
-                throw new HttpResponseError(
+                // eslint-disable-next-line @typescript-eslint/only-throw-error
+                throw new Response(
                   JSON.stringify({
                     error: "unauthorized",
                     error_description: "Invalid username or password",
                   }),
-                  401,
-                  "Unauthorized",
                   {
-                    "Content-Type": "application/json",
-                    "WWW-Authenticate": `Basic realm="MCP"`,
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Basic realm="MCP"`,
+                    },
                   },
                 )
               }
@@ -230,16 +230,19 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
 
                 if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                  throw new HttpResponseError(
+                  // eslint-disable-next-line @typescript-eslint/only-throw-error
+                  throw new Response(
                     JSON.stringify({
                       error: "invalid_token",
                       error_description: "Invalid token structure",
                     }),
-                    401,
-                    "Unauthorized",
                     {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`,
+                      status: 401,
+                      statusText: "Unauthorized",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`,
+                      },
                     },
                   )
                 }
@@ -247,16 +250,19 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 // Validate audience
                 const expectedAudience = options.oauth?.resource || `${baseUrl}/mcp`
                 if (decoded.aud && decoded.aud !== expectedAudience) {
-                  throw new HttpResponseError(
+                  // eslint-disable-next-line @typescript-eslint/only-throw-error
+                  throw new Response(
                     JSON.stringify({
                       error: "invalid_token",
                       error_description: "Token audience mismatch",
                     }),
-                    401,
-                    "Unauthorized",
                     {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`,
+                      status: 401,
+                      statusText: "Unauthorized",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`,
+                      },
                     },
                   )
                 }
@@ -268,35 +274,41 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: (decoded.scope as string) || "read write",
                 })
               } catch (error) {
-                if (error instanceof HttpResponseError) {
-                  throw error // Re-throw our custom HttpResponseError errors
+                if (error instanceof Response) {
+                  throw error // Re-throw our custom Response errors
                 }
 
-                throw new HttpResponseError(
+                // eslint-disable-next-line @typescript-eslint/only-throw-error
+                throw new Response(
                   JSON.stringify({
                     error: "invalid_token",
                     error_description: "Invalid or expired token",
                   }),
-                  401,
-                  "Unauthorized",
                   {
-                    "Content-Type": "application/json",
-                    "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`,
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`,
+                    },
                   },
                 )
               }
             }
 
-            throw new HttpResponseError(
+            // eslint-disable-next-line @typescript-eslint/only-throw-error
+            throw new Response(
               JSON.stringify({
                 error: "unauthorized",
                 error_description: "Invalid authorization header format",
               }),
-              401,
-              "Unauthorized",
               {
-                "Content-Type": "application/json",
-                "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                status: 401,
+                statusText: "Unauthorized",
+                headers: {
+                  "Content-Type": "application/json",
+                  "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                },
               },
             )
           },
