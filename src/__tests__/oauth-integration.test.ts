@@ -22,11 +22,11 @@ describe("OAuth Integration Tests", () => {
 
     let stderr = ""
     let stdout = ""
-    
+
     init.stderr?.on("data", (data) => {
       stderr += data.toString()
     })
-    
+
     init.stdout?.on("data", (data) => {
       stdout += data.toString()
     })
