@@ -354,14 +354,11 @@ async function main(): Promise<void> {
         process.exit(1)
       }
 
-      // Use username for both login and user ID, unless explicitly overridden
-      const userId = process.env.KUZU_OAUTH_USER_ID || username
-
       oauthConfig = {
         enabled: true,
         username,
         password,
-        userId,
+        userId: process.env.KUZU_OAUTH_USER_ID || username,
         email: process.env.KUZU_OAUTH_EMAIL,
         issuer: process.env.KUZU_OAUTH_ISSUER || `http://localhost:${options.port || 3000}`,
         resource: process.env.KUZU_OAUTH_RESOURCE,
@@ -369,7 +366,10 @@ async function main(): Promise<void> {
 
       console.error("🔐 OAuth enabled with username/password authentication")
       console.error(`   Username: ${oauthConfig.username}`)
+      console.error(`   Password length: ${oauthConfig.password.length}`)
       console.error(`   User ID: ${oauthConfig.userId}`)
+      console.error(`   Email: ${oauthConfig.email}`)
+      console.error(`   Issuer: ${oauthConfig.issuer}`)
       console.error("   ✓ Login form will be shown at authorization endpoint")
     }
 

@@ -412,9 +412,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           }
         }
 
-        // Show the username for login (user ID is only used internally for tokens)
-        const usernameHelp = `Username: ${options.oauth?.username}`
-
         // Serve login form
         const loginForm = `
 <!DOCTYPE html>
@@ -430,7 +427,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         button:hover { background: #005a87; }
         .error { color: red; margin-bottom: 10px; }
         .app-info { background: #f5f5f5; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-        .login-help { background: #e8f4f8; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -438,11 +434,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         <h3>🔐 OAuth Authorization</h3>
         <p><strong>Application:</strong> ${clientId || "MCP Client"}</p>
         <p><strong>Permissions:</strong> Read and write access to Kuzu database</p>
-    </div>
-    
-    <div class="login-help">
-        <strong>💡 Login Info:</strong><br>
-        ${usernameHelp}
     </div>
     
     <form method="POST" action="/oauth/authorize">
@@ -489,7 +480,12 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           const codeChallenge = params.get("code_challenge")
           const codeChallengeMethod = params.get("code_challenge_method")
 
-          // Validate credentials - only accept the configured username for login
+          // Validate credentials
+          console.error(`🔐 Login attempt - Username: '${username}', Expected: '${options.oauth?.username}'`)
+          console.error(
+            `🔐 Login attempt - Password length: ${password?.length}, Expected length: ${options.oauth?.password?.length}`,
+          )
+
           if (username !== options.oauth?.username || password !== options.oauth?.password) {
             const errorForm = `
 <!DOCTYPE html>
