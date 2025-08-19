@@ -20,10 +20,24 @@ describe("OAuth Integration Tests", () => {
       stdio: "pipe",
     })
 
+    let stderr = ""
+    let stdout = ""
+    
+    init.stderr?.on("data", (data) => {
+      stderr += data.toString()
+    })
+    
+    init.stdout?.on("data", (data) => {
+      stdout += data.toString()
+    })
+
     await new Promise((resolve, reject) => {
       init.on("close", (code) => {
-        if (code === 0) resolve(undefined)
-        else reject(new Error(`Init failed with code ${code}`))
+        if (code === 0) {
+          resolve(undefined)
+        } else {
+          reject(new Error(`Init failed with code ${code}. Stdout: ${stdout}. Stderr: ${stderr}`))
+        }
       })
     })
   })
