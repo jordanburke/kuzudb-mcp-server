@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/only-throw-error */
 import { FastMCP } from "@jordanburke/fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
@@ -10,10 +11,6 @@ import { getDatabaseInfo, createSimpleArchive, exportDatabase } from "./backup-u
 import * as os from "os"
 import * as path from "path"
 import * as fs from "fs/promises"
-
-// Node.js 18+ has global Response, but TypeScript needs explicit typing
-// Use globalThis to access it in a type-safe way
-const { Response } = globalThis
 
 export interface OAuthConfig {
   enabled: boolean
@@ -157,7 +154,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             if (!authHeader) {
               if (options.oauth?.enabled) {
                 // Return HTTP 401 with WWW-Authenticate header for proper OAuth discovery
-                // eslint-disable-next-line @typescript-eslint/only-throw-error
                 throw new Response(
                   JSON.stringify({
                     error: "unauthorized",
@@ -175,7 +171,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
               }
 
               // For non-OAuth servers, also require some form of auth
-              // eslint-disable-next-line @typescript-eslint/only-throw-error
               throw new Response(
                 JSON.stringify({
                   error: "unauthorized",
@@ -203,7 +198,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: "read write",
                 })
               } else {
-                // eslint-disable-next-line @typescript-eslint/only-throw-error
                 throw new Response(
                   JSON.stringify({
                     error: "unauthorized",
@@ -230,7 +224,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
 
                 if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                  // eslint-disable-next-line @typescript-eslint/only-throw-error
                   throw new Response(
                     JSON.stringify({
                       error: "invalid_token",
@@ -250,7 +243,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 // Validate audience
                 const expectedAudience = options.oauth?.resource || `${baseUrl}/mcp`
                 if (decoded.aud && decoded.aud !== expectedAudience) {
-                  // eslint-disable-next-line @typescript-eslint/only-throw-error
                   throw new Response(
                     JSON.stringify({
                       error: "invalid_token",
@@ -278,7 +270,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   throw error // Re-throw our custom Response errors
                 }
 
-                // eslint-disable-next-line @typescript-eslint/only-throw-error
                 throw new Response(
                   JSON.stringify({
                     error: "invalid_token",
@@ -296,7 +287,6 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
               }
             }
 
-            // eslint-disable-next-line @typescript-eslint/only-throw-error
             throw new Response(
               JSON.stringify({
                 error: "unauthorized",

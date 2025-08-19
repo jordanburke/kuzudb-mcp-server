@@ -22,6 +22,9 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         Buffer: 'readonly',
+        Response: 'readonly', // Node.js 18+ Web API
+        fetch: 'readonly', // Node.js 18+ Web API
+        URL: 'readonly', // Node.js 18+ Web API
       },
     },
     plugins: {
@@ -40,12 +43,25 @@ export default [
         allowTypedFunctionExpressions: true,
       }],
       '@typescript-eslint/no-non-null-assertion': 'off',
+      // Configure only-throw-error to be more permissive with Web API objects
+      '@typescript-eslint/only-throw-error': ['error', {
+        allowThrowingAny: true,
+        allowThrowingUnknown: true,
+        allowRethrowing: true
+      }],
     },
   },
   {
     files: ['**/__tests__/**/*.ts', '**/*.test.ts'],
     rules: {
       '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/only-throw-error': 'off', // Allow Response objects in tests
     },
   },
   {
