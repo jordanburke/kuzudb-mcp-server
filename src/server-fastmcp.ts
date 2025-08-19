@@ -153,30 +153,36 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             if (!authHeader) {
               if (options.oauth?.enabled) {
                 // Return HTTP 401 with WWW-Authenticate header for proper OAuth discovery
-                throw new Response(JSON.stringify({
+                throw new Response(
+                  JSON.stringify({
+                    error: "unauthorized",
+                    error_description: "Authorization required. Please authenticate via OAuth.",
+                  }),
+                  {
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                    },
+                  },
+                )
+              }
+
+              // For non-OAuth servers, also require some form of auth
+              throw new Response(
+                JSON.stringify({
                   error: "unauthorized",
-                  error_description: "Authorization required. Please authenticate via OAuth."
-                }), {
+                  error_description: "Authorization required.",
+                }),
+                {
                   status: 401,
                   statusText: "Unauthorized",
                   headers: {
                     "Content-Type": "application/json",
-                    "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`
-                  }
-                })
-              }
-              
-              // For non-OAuth servers, also require some form of auth
-              throw new Response(JSON.stringify({
-                error: "unauthorized",
-                error_description: "Authorization required."
-              }), {
-                status: 401,
-                statusText: "Unauthorized",
-                headers: {
-                  "Content-Type": "application/json"
-                }
-              })
+                  },
+                },
+              )
             }
 
             // Handle Basic Authentication
@@ -191,17 +197,20 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: "read write",
                 })
               } else {
-                throw new Response(JSON.stringify({
-                  error: "unauthorized",
-                  error_description: "Invalid username or password"
-                }), {
-                  status: 401,
-                  statusText: "Unauthorized",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "WWW-Authenticate": `Basic realm="MCP"`
-                  }
-                })
+                throw new Response(
+                  JSON.stringify({
+                    error: "unauthorized",
+                    error_description: "Invalid username or password",
+                  }),
+                  {
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Basic realm="MCP"`,
+                    },
+                  },
+                )
               }
             }
 
@@ -214,33 +223,39 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
 
                 if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                  throw new Response(JSON.stringify({
-                    error: "invalid_token",
-                    error_description: "Invalid token structure"
-                  }), {
-                    status: 401,
-                    statusText: "Unauthorized",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`
-                    }
-                  })
+                  throw new Response(
+                    JSON.stringify({
+                      error: "invalid_token",
+                      error_description: "Invalid token structure",
+                    }),
+                    {
+                      status: 401,
+                      statusText: "Unauthorized",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`,
+                      },
+                    },
+                  )
                 }
 
                 // Validate audience
                 const expectedAudience = options.oauth?.resource || `${baseUrl}/mcp`
                 if (decoded.aud && decoded.aud !== expectedAudience) {
-                  throw new Response(JSON.stringify({
-                    error: "invalid_token",
-                    error_description: "Token audience mismatch"
-                  }), {
-                    status: 401,
-                    statusText: "Unauthorized",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`
-                    }
-                  })
+                  throw new Response(
+                    JSON.stringify({
+                      error: "invalid_token",
+                      error_description: "Token audience mismatch",
+                    }),
+                    {
+                      status: 401,
+                      statusText: "Unauthorized",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`,
+                      },
+                    },
+                  )
                 }
 
                 // Return user info from JWT claims
@@ -253,32 +268,38 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 if (error instanceof Response) {
                   throw error // Re-throw our custom Response errors
                 }
-                
-                throw new Response(JSON.stringify({
-                  error: "invalid_token",
-                  error_description: "Invalid or expired token"
-                }), {
-                  status: 401,
-                  statusText: "Unauthorized",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`
-                  }
-                })
+
+                throw new Response(
+                  JSON.stringify({
+                    error: "invalid_token",
+                    error_description: "Invalid or expired token",
+                  }),
+                  {
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`,
+                    },
+                  },
+                )
               }
             }
 
-            throw new Response(JSON.stringify({
-              error: "unauthorized",
-              error_description: "Invalid authorization header format"
-            }), {
-              status: 401,
-              statusText: "Unauthorized",
-              headers: {
-                "Content-Type": "application/json",
-                "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`
-              }
-            })
+            throw new Response(
+              JSON.stringify({
+                error: "unauthorized",
+                error_description: "Invalid authorization header format",
+              }),
+              {
+                status: 401,
+                statusText: "Unauthorized",
+                headers: {
+                  "Content-Type": "application/json",
+                  "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
+                },
+              },
+            )
           },
         })
       : new FastMCP(baseConfig)
@@ -773,7 +794,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     "/",
     (_req, res) => {
       const baseUrl = options.oauth?.issuer || `http://localhost:${options.port || 3000}`
-      
+
       const serverInfo = {
         name: "Kuzu MCP Server",
         version: "0.11.10",
