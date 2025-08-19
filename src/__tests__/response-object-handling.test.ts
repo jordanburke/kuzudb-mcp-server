@@ -114,7 +114,7 @@ describe("Response Object Handling", () => {
         expect(testCase.response.headers.get("WWW-Authenticate")).toBeTruthy()
 
         // Verify the response body can be read
-        const body = await testCase.response.json()
+        const body = (await testCase.response.json()) as { error: string; error_description: string }
         expect(body).toHaveProperty("error")
         expect(body).toHaveProperty("error_description")
         expect(typeof body.error).toBe("string")
