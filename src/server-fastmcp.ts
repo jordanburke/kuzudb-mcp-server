@@ -11,6 +11,19 @@ import * as os from "os"
 import * as path from "path"
 import * as fs from "fs/promises"
 
+// Define a custom error class that can carry HTTP response information
+class HttpResponseError extends Error {
+  constructor(
+    public body: string,
+    public status: number,
+    public statusText: string,
+    public headers: Record<string, string>,
+  ) {
+    super(`HTTP ${status}: ${statusText}`)
+    this.name = "HttpResponseError"
+  }
+}
+
 export interface OAuthConfig {
   enabled: boolean
   username: string
@@ -153,34 +166,30 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             if (!authHeader) {
               if (options.oauth?.enabled) {
                 // Return HTTP 401 with WWW-Authenticate header for proper OAuth discovery
-                throw new Response(
+                throw new HttpResponseError(
                   JSON.stringify({
                     error: "unauthorized",
                     error_description: "Authorization required. Please authenticate via OAuth.",
                   }),
+                  401,
+                  "Unauthorized",
                   {
-                    status: 401,
-                    statusText: "Unauthorized",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
-                    },
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
                   },
                 )
               }
 
               // For non-OAuth servers, also require some form of auth
-              throw new Response(
+              throw new HttpResponseError(
                 JSON.stringify({
                   error: "unauthorized",
                   error_description: "Authorization required.",
                 }),
+                401,
+                "Unauthorized",
                 {
-                  status: 401,
-                  statusText: "Unauthorized",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
+                  "Content-Type": "application/json",
                 },
               )
             }
@@ -197,18 +206,16 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: "read write",
                 })
               } else {
-                throw new Response(
+                throw new HttpResponseError(
                   JSON.stringify({
                     error: "unauthorized",
                     error_description: "Invalid username or password",
                   }),
+                  401,
+                  "Unauthorized",
                   {
-                    status: 401,
-                    statusText: "Unauthorized",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Basic realm="MCP"`,
-                    },
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Basic realm="MCP"`,
                   },
                 )
               }
@@ -223,18 +230,16 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
 
                 if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                  throw new Response(
+                  throw new HttpResponseError(
                     JSON.stringify({
                       error: "invalid_token",
                       error_description: "Invalid token structure",
                     }),
+                    401,
+                    "Unauthorized",
                     {
-                      status: 401,
-                      statusText: "Unauthorized",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`,
-                      },
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`,
                     },
                   )
                 }
@@ -242,18 +247,16 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 // Validate audience
                 const expectedAudience = options.oauth?.resource || `${baseUrl}/mcp`
                 if (decoded.aud && decoded.aud !== expectedAudience) {
-                  throw new Response(
+                  throw new HttpResponseError(
                     JSON.stringify({
                       error: "invalid_token",
                       error_description: "Token audience mismatch",
                     }),
+                    401,
+                    "Unauthorized",
                     {
-                      status: 401,
-                      statusText: "Unauthorized",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`,
-                      },
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`,
                     },
                   )
                 }
@@ -265,39 +268,35 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: (decoded.scope as string) || "read write",
                 })
               } catch (error) {
-                if (error instanceof Response) {
-                  throw error // Re-throw our custom Response errors
+                if (error instanceof HttpResponseError) {
+                  throw error // Re-throw our custom HttpResponseError errors
                 }
 
-                throw new Response(
+                throw new HttpResponseError(
                   JSON.stringify({
                     error: "invalid_token",
                     error_description: "Invalid or expired token",
                   }),
+                  401,
+                  "Unauthorized",
                   {
-                    status: 401,
-                    statusText: "Unauthorized",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`,
-                    },
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`,
                   },
                 )
               }
             }
 
-            throw new Response(
+            throw new HttpResponseError(
               JSON.stringify({
                 error: "unauthorized",
                 error_description: "Invalid authorization header format",
               }),
+              401,
+              "Unauthorized",
               {
-                status: 401,
-                statusText: "Unauthorized",
-                headers: {
-                  "Content-Type": "application/json",
-                  "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
-                },
+                "Content-Type": "application/json",
+                "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`,
               },
             )
           },
