@@ -147,21 +147,36 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           },
           authenticate: (request) => {
             const authHeader = request.headers?.authorization
+            const baseUrl = options.oauth?.issuer || `http://localhost:${options.port || 3000}`
 
-            // Allow initial MCP discovery requests without authentication
-            // MCP Inspector and other clients need to connect first to discover OAuth capabilities
+            // For OAuth-enabled servers, require authentication
             if (!authHeader) {
-              // For OAuth-enabled servers, we need to allow initial connections for discovery
-              // but the actual tool calls will be protected by the OAuth flow
               if (options.oauth?.enabled) {
-                // Return a minimal session that allows discovery but will fail on actual tool use
-                return Promise.resolve({
-                  userId: "unauthenticated",
-                  email: "",
-                  scope: "discovery", // Limited scope for discovery only
+                // Return HTTP 401 with WWW-Authenticate header for proper OAuth discovery
+                throw new Response(JSON.stringify({
+                  error: "unauthorized",
+                  error_description: "Authorization required. Please authenticate via OAuth."
+                }), {
+                  status: 401,
+                  statusText: "Unauthorized",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`
+                  }
                 })
               }
-              throw new Error("Missing authorization header")
+              
+              // For non-OAuth servers, also require some form of auth
+              throw new Response(JSON.stringify({
+                error: "unauthorized",
+                error_description: "Authorization required."
+              }), {
+                status: 401,
+                statusText: "Unauthorized",
+                headers: {
+                  "Content-Type": "application/json"
+                }
+              })
             }
 
             // Handle Basic Authentication
@@ -176,7 +191,17 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   scope: "read write",
                 })
               } else {
-                throw new Error("Invalid username or password")
+                throw new Response(JSON.stringify({
+                  error: "unauthorized",
+                  error_description: "Invalid username or password"
+                }), {
+                  status: 401,
+                  statusText: "Unauthorized",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Basic realm="MCP"`
+                  }
+                })
               }
             }
 
@@ -189,7 +214,33 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                 const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
 
                 if (!decoded.sub || !decoded.iat || !decoded.exp) {
-                  throw new Error("Invalid token structure")
+                  throw new Response(JSON.stringify({
+                    error: "invalid_token",
+                    error_description: "Invalid token structure"
+                  }), {
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid token structure"`
+                    }
+                  })
+                }
+
+                // Validate audience
+                const expectedAudience = options.oauth?.resource || `${baseUrl}/mcp`
+                if (decoded.aud && decoded.aud !== expectedAudience) {
+                  throw new Response(JSON.stringify({
+                    error: "invalid_token",
+                    error_description: "Token audience mismatch"
+                  }), {
+                    status: 401,
+                    statusText: "Unauthorized",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Token audience mismatch"`
+                    }
+                  })
                 }
 
                 // Return user info from JWT claims
@@ -198,12 +249,36 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
                   email: (decoded.email as string) || "",
                   scope: (decoded.scope as string) || "read write",
                 })
-              } catch {
-                throw new Error("Invalid or expired token")
+              } catch (error) {
+                if (error instanceof Response) {
+                  throw error // Re-throw our custom Response errors
+                }
+                
+                throw new Response(JSON.stringify({
+                  error: "invalid_token",
+                  error_description: "Invalid or expired token"
+                }), {
+                  status: 401,
+                  statusText: "Unauthorized",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "WWW-Authenticate": `Bearer realm="MCP", error="invalid_token", error_description="Invalid or expired token"`
+                  }
+                })
               }
             }
 
-            throw new Error("Invalid authorization header format")
+            throw new Response(JSON.stringify({
+              error: "unauthorized",
+              error_description: "Invalid authorization header format"
+            }), {
+              status: 401,
+              statusText: "Unauthorized",
+              headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": `Bearer realm="MCP", authorization_uri="${baseUrl}/oauth/authorize", resource="${baseUrl}/.well-known/oauth-protected-resource"`
+              }
+            })
           },
         })
       : new FastMCP(baseConfig)
@@ -215,13 +290,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     parameters: z.object({
       cypher: z.string().describe("The Cypher query to run"),
     }),
-    execute: async (args, context) => {
+    execute: async (args) => {
       try {
-        // Check if user is properly authenticated (not just discovery mode)
-        if (context?.session?.scope === "discovery") {
-          return `ERROR: Authentication required. Please complete OAuth flow to access tools.`
-        }
-
         const result = await executeQuery(args.cypher, dbManager)
 
         if (result.isError) {
@@ -244,13 +314,8 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     name: "getSchema",
     description: "Get the schema of the Kuzu database",
     parameters: z.object({}),
-    execute: async (_args, context) => {
+    execute: async (_args) => {
       try {
-        // Check if user is properly authenticated (not just discovery mode)
-        if (context?.session?.scope === "discovery") {
-          return `ERROR: Authentication required. Please complete OAuth flow to access tools.`
-        }
-
         const schema = await getSchema(dbManager.conn)
         return JSON.stringify(schema, null, 2)
       } catch (error) {
@@ -270,12 +335,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     parameters: z.object({
       question: z.string().describe("The question in natural language to generate the Cypher query for"),
     }),
-    execute: async (args, context) => {
-      // Check if user is properly authenticated (not just discovery mode)
-      if (context?.session?.scope === "discovery") {
-        return `ERROR: Authentication required. Please complete OAuth flow to access tools.`
-      }
-
+    execute: async (args) => {
       const question = args.question
       if (!question) {
         throw new Error("Missing required argument: question")
@@ -716,20 +776,74 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
     console.error(`    - Registration: http://localhost:${options.port || 3000}/oauth/register`)
   }
 
+  // Add root info endpoint for resource discovery
+  server.addRoute(
+    "GET",
+    "/",
+    (_req, res) => {
+      const baseUrl = options.oauth?.issuer || `http://localhost:${options.port || 3000}`
+      
+      const serverInfo = {
+        name: "Kuzu MCP Server",
+        version: "0.11.10",
+        description: "Model Context Protocol server for Kuzu graph database operations",
+        service: "kuzudb-mcp-server",
+        database: {
+          path: options.databasePath,
+          readonly: options.isReadOnly,
+          connected: !!dbManager.conn,
+        },
+        capabilities: {
+          tools: ["query", "getSchema", "generateKuzuCypher"],
+          transports: ["stdio", "http"],
+          authentication: {
+            oauth: options.oauth?.enabled || false,
+            basicAuth: !!options.basicAuth,
+          },
+        },
+        endpoints: {
+          mcp: `${baseUrl}${options.endpoint || "/mcp"}`,
+          health: `${baseUrl}/health`,
+          ...(process.env.KUZU_WEB_UI_ENABLED !== "false" && {
+            admin: `${baseUrl}/admin`,
+            api: {
+              info: `${baseUrl}/api/info`,
+              health: `${baseUrl}/api/health`,
+              backup: `${baseUrl}/api/backup`,
+              export: `${baseUrl}/api/export`,
+              restore: `${baseUrl}/api/restore`,
+            },
+          }),
+          ...(options.oauth?.enabled && {
+            oauth: {
+              authorization: `${baseUrl}/oauth/authorize`,
+              token: `${baseUrl}/oauth/token`,
+              jwks: `${baseUrl}/oauth/jwks`,
+              register: `${baseUrl}/oauth/register`,
+              discovery: {
+                authorizationServer: `${baseUrl}/.well-known/oauth-authorization-server`,
+                protectedResource: `${baseUrl}/.well-known/oauth-protected-resource`,
+              },
+            },
+          }),
+        },
+        documentation: {
+          mcp: "https://modelcontextprotocol.io",
+          kuzu: "https://kuzudb.com",
+          cypher: "https://docs.kuzudb.com/cypher",
+        },
+        timestamp: new Date().toISOString(),
+      }
+
+      res.json(serverInfo)
+    },
+    { public: true },
+  )
+
   // Add Admin UI routes
   const webUIEnabled = process.env.KUZU_WEB_UI_ENABLED !== "false"
   if (webUIEnabled) {
-    // Redirect root to admin
-    server.addRoute(
-      "GET",
-      "/",
-      (_req, res) => {
-        res.status(302).setHeader("Location", "/admin").end()
-      },
-      { public: true },
-    )
-
-    // Serve the admin UI
+    // Serve the admin UI at /admin (root now shows server info)
     server.addRoute(
       "GET",
       "/admin",
