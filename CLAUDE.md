@@ -8,16 +8,38 @@ kuzudb-mcp-server is a Model Context Protocol (MCP) server that enables AI agent
 
 ## Development Commands
 
-### Building and Running
+### Pre-Checkin Command
+```bash
+pnpm ci                      # 🚀 Main command: format, lint, typecheck, test, and build
+```
+
+### Individual Commands
+```bash
+# Formatting
+pnpm format                  # Format code with Prettier
+pnpm format:check            # Check formatting without writing
+
+# Linting
+pnpm lint                    # Fix ESLint issues
+pnpm lint:check              # Check ESLint issues without fixing
+
+# Type Checking
+pnpm typecheck               # Check TypeScript types
+
+# Testing
+pnpm test                    # Run tests once
+pnpm test:ui                 # Run tests with UI
+pnpm test:coverage           # Run tests with coverage
+
+# Building
+pnpm build                   # Production build
+pnpm dev                     # Development mode with watch
+```
+
+### Server Operations
 ```bash
 # Install dependencies
 pnpm install
-
-# Build the project
-pnpm build
-
-# Development mode with watch
-pnpm dev
 
 # Quick test with auto-created database
 pnpm serve:test              # stdio transport (default)
@@ -27,26 +49,10 @@ pnpm serve:test:inspect      # HTTP with MCP Inspector
 # Initialize databases manually
 pnpm db:init                 # Create empty test database
 pnpm db:init:movies          # Create database with movie data
-
-# Type checking and linting
-pnpm typecheck
-pnpm lint
-pnpm lint:fix
-pnpm format
-pnpm format:check
 ```
 
-### Testing
+### Advanced Testing
 ```bash
-# Run all tests
-pnpm test
-
-# Run tests with UI
-pnpm test:ui
-
-# Run tests with coverage
-pnpm test:coverage
-
 # Run a single test file
 pnpm test src/__tests__/query-helpers.test.ts
 
@@ -210,6 +216,7 @@ When `KUZU_MULTI_AGENT=true`, lock files are created in the database directory:
 | `KUZU_OAUTH_ENABLED` | Enable OAuth authentication | `false` | HTTP transport auth |
 | `KUZU_BASIC_AUTH_USERNAME` | Basic auth username | - | HTTP transport auth |
 | `KUZU_BASIC_AUTH_PASSWORD` | Basic auth password | - | HTTP transport auth |
+| `KUZU_JWT_EXPIRES_IN` | JWT token expiration time (seconds) | `86400` (24 hours) | Authentication duration |
 
 ## Common Issues and Solutions
 

@@ -31,19 +31,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check formatting
-        run: pnpm run format:check
+      - name: Run CI Pipeline
+        run: pnpm run ci
+        timeout-minutes: 5
 
-      - name: Lint code
-        run: pnpm run lint
-
-      - name: Type check
-        run: pnpm run typecheck
-
-      - name: Build project
-        run: pnpm run build
-
-      - name: Run tests
+      - name: Run tests with coverage
         run: pnpm run test:coverage
         timeout-minutes: 5
 

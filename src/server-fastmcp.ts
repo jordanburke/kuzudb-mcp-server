@@ -61,6 +61,9 @@ export interface FastMCPServerOptions {
 // JWT secret for token signing/validation
 const JWT_SECRET = process.env.KUZU_JWT_SECRET || randomBytes(32).toString("hex")
 
+// JWT token expiration configuration (default: 24 hours)
+const JWT_EXPIRES_IN = process.env.KUZU_JWT_EXPIRES_IN ? parseInt(process.env.KUZU_JWT_EXPIRES_IN, 10) : 24 * 60 * 60 // 24 hours in seconds
+
 // In-memory stores for OAuth flow
 const authorizationCodes = new Map<
   string,
@@ -595,12 +598,12 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             email: tokenData.email,
           })
 
-          const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET)
+          const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 
           res.json({
             access_token: accessToken,
             token_type: "Bearer",
-            expires_in: 900, // 15 minutes
+            expires_in: JWT_EXPIRES_IN,
             scope: "read write",
             refresh_token: newRefreshToken,
           })
@@ -682,12 +685,12 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           email: options.oauth?.email,
         })
 
-        const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET)
+        const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 
         res.json({
           access_token: accessToken,
           token_type: "Bearer",
-          expires_in: 900, // 15 minutes
+          expires_in: JWT_EXPIRES_IN,
           scope: "read write",
           refresh_token: refreshToken,
         })
