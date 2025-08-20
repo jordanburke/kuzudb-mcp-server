@@ -55,6 +55,18 @@ pnpm test -- -t "MERGE validation"
 
 # Clean test databases
 pnpm clean:test-dbs
+
+# Authentication testing with OAuth
+pnpm serve:test:http:oauth     # OAuth with admin/secret123
+pnpm serve:test:inspect:oauth  # OAuth with MCP Inspector
+
+# Authentication testing with Basic Auth
+pnpm serve:test:http:basic     # Basic auth with admin/secret123
+pnpm serve:test:inspect:basic  # Basic auth with MCP Inspector
+
+# Server management
+pnpm kill    # or pnpm stop - Kill running servers
+pnpm restart # Kill servers and restart with HTTP transport
 ```
 
 ### Docker Operations
@@ -91,6 +103,7 @@ The codebase is organized into distinct modules with clear responsibilities:
    - Implements exponential backoff retry logic (1s, 2s, 4s delays)
    - Handles connection health monitoring and validation
    - Process-level error recovery (uncaught exceptions, unhandled rejections)
+   - Parser/Binder error recovery (prevents connection corruption from syntax errors)
 
 3. **Query Processing Layer**
    - `src/query-helpers.ts` - Batch query execution, error formatting, DDL detection
@@ -190,12 +203,21 @@ When `KUZU_MULTI_AGENT=true`, lock files are created in the database directory:
 | `KUZU_MULTI_AGENT` | Enable multi-agent coordination | `false` | Write locking |
 | `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` | Lock ownership |
 | `KUZU_LOCK_TIMEOUT` | Lock acquisition timeout (ms) | `10000` | Write operations |
+| `KUZU_WEB_UI_ENABLED` | Enable/disable web UI (HTTP mode only) | `true` | Web interface availability |
+| `KUZU_WEB_UI_PORT` | Port for web UI server | `3001` | Web interface port |
+| `KUZU_WEB_UI_AUTH_USER` | Username for web UI authentication | - | Web interface security |
+| `KUZU_WEB_UI_AUTH_PASSWORD` | Password for web UI authentication | - | Web interface security |
+| `KUZU_OAUTH_ENABLED` | Enable OAuth authentication | `false` | HTTP transport auth |
+| `KUZU_BASIC_AUTH_USERNAME` | Basic auth username | - | HTTP transport auth |
+| `KUZU_BASIC_AUTH_PASSWORD` | Basic auth password | - | HTTP transport auth |
 
 ## Common Issues and Solutions
 
 ### Connection Issues
 - **"Database connection could not be restored"** - Check database file exists and is accessible
 - **"getAll timeout"** - DDL operation hung, server will retry with new connection
+- **"Parser exception" errors** - Syntax errors now trigger automatic connection recovery
+- **"Binder exception" errors** - Function/schema errors now trigger automatic connection recovery  
 - **Lock timeout** - Another agent is writing, wait and retry
 
 ### Docker Health Check Failures
@@ -225,3 +247,23 @@ When adding features:
 2. Add integration tests for user-facing changes
 3. Test error cases and edge conditions
 4. Mock external dependencies (kuzu module)
+
+## Web UI Features
+
+The server includes a web-based interface (auto-enabled with HTTP transport):
+- **Database Management**: Backup, restore, and upload database files
+- **Authentication**: Optional OAuth and Basic Auth support
+- **Access URL**: `http://localhost:3001/admin` (when HTTP transport is active)
+- **API Endpoints**: `/health`, `/api/info`, `/api/backup`, `/api/restore`
+
+The Web UI automatically starts on port 3001 when using HTTP transport and can be disabled with `KUZU_WEB_UI_ENABLED=false`.
+
+## Publication and Distribution
+
+The project is published to npm as `kuzudb-mcp-server` and supports:
+- Global installation: `npm install -g kuzudb-mcp-server`
+- Direct usage: `npx kuzudb-mcp-server`
+- Docker images: `ghcr.io/jordanburke/kuzudb-mcp-server:latest`
+- Smithery package manager: `smithery install kuzudb-mcp-server`
+
+Pre-publish validation runs: lint, typecheck, format check, test coverage, and build.

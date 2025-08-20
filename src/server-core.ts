@@ -347,7 +347,9 @@ export async function executeQuery(cypher: string, dbManager: DatabaseManager): 
             lastError.message.includes("Connection") ||
             lastError.message.includes("Database") ||
             lastError.message.includes("closed") ||
-            lastError.message.includes("getAll timeout")
+            lastError.message.includes("getAll timeout") ||
+            lastError.message.includes("Parser exception") ||
+            lastError.message.includes("Binder exception")
 
           if (!isConnectionError || attempt >= maxRetries) {
             // Either not a connection error, or we've exhausted retries

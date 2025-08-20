@@ -1,259 +1,248 @@
 # kuzudb-mcp-server
 
-A Model Context Protocol server that provides access to Kuzu databases. This server enables LLMs to inspect database schemas and execute queries on provided kuzu database.
+A Model Context Protocol server that provides access to Kuzu graph databases. This server enables LLMs to inspect database schemas and execute queries with robust connection recovery, multi-agent coordination, and a built-in web interface.
+
+## 🚀 Key Features
+
+- **📊 Web UI**: Built-in database management interface with backup/restore capabilities
+- **🔐 Authentication**: OAuth and Basic Auth support for secure access
+- **🤝 Multi-Agent**: Safe concurrent access from multiple AI agents (experimental)
+- **🔄 Auto-Recovery**: Automatic connection recovery with exponential backoff
+- **🐳 Docker Ready**: Pre-built images and docker-compose workflow
+- **📱 Dual Transport**: Both stdio and HTTP transport modes
+- **🧠 AI-Powered**: Natural language to Cypher query generation
 
 ## Quick Start
 
-For quick testing and development:
-
+### Install and Test
 ```bash
-# Install the package
+# Install globally
 npm install -g kuzudb-mcp-server
-# or use pnpm/yarn
 
-# Clone the repository for development
+# Quick test with auto-created database
+pnpm serve:test              # stdio transport (default)
+pnpm serve:test:http         # HTTP transport with Web UI
+pnpm serve:test:inspect      # HTTP with MCP Inspector
+
+# Server management
+pnpm kill    # Stop running servers
+pnpm restart # Restart with HTTP transport
+```
+
+### Development Setup
+```bash
+# Clone and setup
 git clone https://github.com/jordanburke/kuzudb-mcp-server.git
 cd kuzudb-mcp-server
 pnpm install
 
-# Quick test with auto-created database
-pnpm serve:test              # stdio transport (default)
-pnpm serve:test:http         # HTTP transport
-pnpm serve:test:inspect      # HTTP with MCP Inspector
+# Initialize databases
+pnpm db:init                 # Empty test database
+pnpm db:init:movies          # Sample movie data
+```
 
-# Initialize databases manually
-pnpm db:init                 # Create empty test database
-pnpm db:init:movies          # Create database with movie data
+### One-Line Docker Setup
+```bash
+# Pull and run with mounted database
+docker run -d -p 3000:3000 -p 3001:3001 \
+  -v /path/to/your/database:/database \
+  ghcr.io/jordanburke/kuzudb-mcp-server:latest
+
+# Access Web UI at http://localhost:3001/admin
+# MCP endpoint at http://localhost:3000/mcp
 ```
 
 ## Components
-### Tools 
-- getSchema
-  -  Fetch the full schema of the Kuzu database, including all nodes and relationships tables and their properties
-  -  Input: None
 
-- query
-  - Run a Cypher query on the Kuzu database
-  - Input: `cypher` (string): The Cypher query to run
+### Tools
+- **getSchema** - Fetch complete database schema (nodes, relationships, properties)
+- **query** - Execute Cypher queries with automatic error recovery
 
-### Prompt
-- generateKuzuCypher
-  - Generate a Cypher query for Kuzu
-  - Argument: `question` (string): The question in natural language to generate the Cypher query for
+### Prompts  
+- **generateKuzuCypher** - Convert natural language to Kuzu-specific Cypher queries
+
+## 🖥️ Web UI for Database Management
+
+The server includes a powerful web interface that automatically starts with HTTP transport.
+
+### Features
+- **📁 Database Backup & Restore**: Download `.kuzu` backups and restore from browser
+- **📤 Direct File Upload**: Upload existing Kuzu database files (main + .wal)
+- **📊 Database Info**: View path, mode, connection status, and schema statistics
+- **🔒 Secure Access**: Optional authentication protection
+- **👁️ Read-Only Support**: Upload/restore disabled in read-only mode
+
+### Quick Access
+```bash
+# Start with Web UI (auto-enabled with HTTP)
+pnpm serve:test:http
+
+# Access Web UI
+open http://localhost:3001/admin
+```
+
+### Docker with Web UI
+```bash
+# Using docker-compose (recommended)
+docker-compose up -d
+open http://localhost:3001/admin
+
+# Manual Docker with Web UI
+docker run -d \
+  -p 3000:3000 -p 3001:3001 \
+  -v /path/to/database:/database \
+  -e KUZU_WEB_UI_AUTH_USER=admin \
+  -e KUZU_WEB_UI_AUTH_PASSWORD=changeme \
+  ghcr.io/jordanburke/kuzudb-mcp-server:latest
+```
+
+### API Endpoints
+- `/admin` - Main web interface
+- `/health` - Health check endpoint  
+- `/api/info` - Database information (JSON)
+- `/api/backup` - Download database backup
+- `/api/restore` - Upload and restore database
+
+## 🔐 Authentication & Security
+
+The server supports two authentication methods for different use cases:
+
+### OAuth (Production Recommended)
+Best for production deployments with token-based security:
+
+```bash
+# Testing OAuth locally
+pnpm serve:test:http:oauth     # admin/secret123
+pnpm serve:test:inspect:oauth  # With MCP Inspector
+
+# Production OAuth setup
+KUZU_OAUTH_ENABLED=true \
+KUZU_OAUTH_USERNAME=admin \
+KUZU_OAUTH_PASSWORD=your-secure-password \
+KUZU_OAUTH_USER_ID=admin-user \
+KUZU_OAUTH_EMAIL=admin@example.com \
+node dist/index.js /path/to/database --transport http
+```
+
+### Basic Auth (Development/Testing)
+Simpler setup for development and testing:
+
+```bash
+# Testing Basic Auth locally  
+pnpm serve:test:http:basic     # admin/secret123
+pnpm serve:test:inspect:basic  # With MCP Inspector
+
+# Production Basic Auth setup
+KUZU_BASIC_AUTH_USERNAME=admin \
+KUZU_BASIC_AUTH_PASSWORD=your-secure-password \
+KUZU_BASIC_AUTH_USER_ID=admin-user \
+KUZU_BASIC_AUTH_EMAIL=admin@example.com \
+node dist/index.js /path/to/database --transport http
+```
+
+### Web UI Authentication
+Secure the Web UI interface:
+
+```bash
+# Add Web UI authentication
+KUZU_WEB_UI_AUTH_USER=admin \
+KUZU_WEB_UI_AUTH_PASSWORD=changeme \
+node dist/index.js /path/to/database --transport http
+```
+
+### Security Recommendations
+- **Always use authentication** for production deployments
+- **Use OAuth** for external-facing servers
+- **Use Basic Auth** for internal development/testing
+- **Enable Web UI auth** when exposing the interface
+- **Use HTTPS** in production environments
 
 ## Usage with Claude Desktop
-### With Docker (Recommended)
-- Edit the configuration file `config.json`:
-  - on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-  - on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Add the following configuration to the `mcpServers` object:
-  ```json
-  {
-    "mcpServers": {
-        "kuzu": {
-            "command": "docker",
-            "args": [
-                "run",
-                "-v",
-                "{Absolute Path to the Kuzu database}:/database",
-                "--rm",
-                "-i",
-                "kuzudb/mcp-server"
-            ]
-        }
+
+### Docker (Recommended)
+```json
+{
+  "mcpServers": {
+    "kuzu": {
+      "command": "docker",
+      "args": [
+        "run", "-v", "/path/to/database:/database",
+        "--rm", "-i", "ghcr.io/jordanburke/kuzudb-mcp-server:latest"
+      ]
     }
   }
-  ```
-  Change the `{Absolute Path to the Kuzu database}` to the actual path
-- Restart Claude Desktop
+}
+```
 
-### With npm/npx
-- Install globally: `npm install -g kuzudb-mcp-server`
-- Or use directly with npx: `npx kuzudb-mcp-server`
-- Edit the configuration file `config.json`:
-  - on macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-  - on Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Add the following configuration to the `mcpServers` object:
-  ```json
-  {
-    "mcpServers": {
-        "kuzu": {
-            "command": "npx",
-            "args": [
-                "kuzudb-mcp-server",
-                "{Absolute Path to the Kuzu database}"
-            ]
-        }
+### npm/npx
+```json
+{
+  "mcpServers": {
+    "kuzu": {
+      "command": "npx",
+      "args": ["kuzudb-mcp-server", "/path/to/database"]
     }
   }
-  ```
-  Change the `{Absolute Path to the Kuzu database}` to the actual path
-- Restart Claude Desktop
+}
+```
 
-### With Smithery
-
-This server is available on [Smithery](https://smithery.ai) for easy installation:
-
+### Smithery (Easiest)
 ```bash
-# Install via Smithery CLI
+# Install via Smithery - includes sample database
 smithery install kuzudb-mcp-server
-
-# The server auto-initializes with a sample movies database
-# No manual database setup required!
 ```
 
-The Smithery version includes:
-- Automatic database initialization with movies template
-- No volume mounting required
-- Ready-to-use graph database for testing and exploration
-
-### Using Environment Variables
-You can also specify the database path using the `KUZU_MCP_DATABASE_PATH` environment variable instead of passing it as an argument:
-
+### Environment Variables
 ```json
 {
-    "mcpServers": {
-        "kuzu": {
-            "command": "npx",
-            "args": ["kuzudb-mcp-server"],
-            "env": {
-                "KUZU_MCP_DATABASE_PATH": "{Absolute Path to the Kuzu database}"
-            }
-        }
+  "mcpServers": {
+    "kuzu": {
+      "command": "npx",
+      "args": ["kuzudb-mcp-server"],
+      "env": {
+        "KUZU_MCP_DATABASE_PATH": "/path/to/database",
+        "KUZU_READ_ONLY": "true"
+      }
     }
+  }
 }
 ```
 
-Alternatively, if you have `KUZU_MCP_DATABASE_PATH` set in your system environment, the server will automatically use it when no database path argument is provided.
+## 🌐 Remote Connection (HTTP Transport)
 
-### Read-Only Mode
-The server can be run in read-only mode by setting the `KUZU_READ_ONLY` environment variable to `true`. In this mode, running any query that attempts to modify the database will result in an error. This flag can be set in the configuration file as follows:
-
-#### With npm/npx:
-```json
-{
-    "mcpServers": {
-        "kuzu": {
-            "command": "npx",
-            "args": [
-                "kuzudb-mcp-server",
-                "{Absolute Path to the Kuzu database}"
-            ],
-            "env": {
-                "KUZU_READ_ONLY": "true"
-            }
-        }
-    }
-}
-```
-
-#### With Docker:
-```json
-{
-    "mcpServers": {
-        "kuzu": {
-            "command": "docker",
-            "args": [
-                "run",
-                "-v",
-                "{Absolute Path to the Kuzu database}:/database",
-                "-e",
-                "KUZU_READ_ONLY=true",
-                "--rm",
-                "-i",
-                "kuzudb/mcp-server"
-            ]
-        }
-    }
-}
-```
-
-## Remote Connection (HTTP Transport)
-
-The server supports both stdio (default) and HTTP transports, allowing remote connections and easier debugging.
-
-### Docker Deployment (HTTP Server)
-
-The easiest way to run the HTTP server is using Docker. Pre-built images are available from GitHub Container Registry:
-
+### Pre-built Docker Images
 ```bash
-# Pull the latest image
+# Pull latest image
 docker pull ghcr.io/jordanburke/kuzudb-mcp-server:latest
 
-# Run with mounted database
+# Run with custom configuration
 docker run -d \
-  -p 3000:3000 \
-  -v /path/to/your/database:/database \
+  -p 3000:3000 -p 3001:3001 \
+  -v /path/to/database:/database \
   -e KUZU_READ_ONLY=false \
   ghcr.io/jordanburke/kuzudb-mcp-server:latest
-
-# Run with custom port and endpoint
-docker run -d \
-  -p 8080:8080 \
-  -v /path/to/your/database:/database \
-  -e PORT=8080 \
-  ghcr.io/jordanburke/kuzudb-mcp-server:latest \
-  node dist/index.js --transport http --port 8080 --endpoint /kuzu
 ```
 
-#### Build Locally
-
+### Local Development
 ```bash
-# Build and run with docker-compose (auto-initializes database if needed)
-docker-compose up -d
-
-# The init container will:
-# - Check if ./data directory contains a database
-# - Initialize with movies template if empty
-# - Skip initialization if database exists
-
-# Or build manually
-docker build -f Dockerfile.http -t kuzu-mcp-http .
-
-# Run your local build
-docker run -d \
-  -p 3000:3000 \
-  -v /path/to/your/database:/database \
-  kuzu-mcp-http
-
-# To use a different template or empty database, run init manually first:
-docker-compose run kuzu-init node dist/index.js --init /database --template social
-```
-
-The HTTP server will be available at `http://localhost:3000/mcp` (or your custom endpoint).
-
-### HTTP Server Mode
-
-To run the server in HTTP mode:
-
-```bash
-# Command line
+# HTTP server mode
 node dist/index.js /path/to/database --transport http --port 3000
 
-# Using npm scripts (with test database)
-pnpm serve:test:http
+# With custom endpoint
+node dist/index.js /path/to/database --transport http --port 8080 --endpoint /kuzu
 ```
 
-### Testing with MCP Inspector
-
-The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is a web-based tool for testing and debugging MCP servers.
-
+### MCP Inspector Testing
 ```bash
-# Start server with inspector (automatically opens browser)
+# Auto-start inspector
 pnpm serve:test:inspect
 
-# Or manually:
-# 1. Start HTTP server
+# Manual setup
 node dist/index.js /path/to/database --transport http
-
-# 2. Open inspector
 npx @modelcontextprotocol/inspector http://localhost:3000/mcp
 ```
 
 ### Remote Client Configuration
-
-For applications supporting HTTP MCP connections:
-
 ```json
 {
   "mcpServers": {
@@ -265,242 +254,139 @@ For applications supporting HTTP MCP connections:
 }
 ```
 
-### HTTP Server Options
+## 🤝 Multi-Agent Coordination (Experimental)
 
-- `--transport http` - Enable HTTP transport (default: stdio)
-- `--port <number>` - HTTP server port (default: 3000)
-- `--endpoint <path>` - Custom endpoint path (default: /mcp)
+Enable safe concurrent access from multiple AI agents (e.g., Claude Desktop + Claude Code):
 
-Example with custom options:
-```bash
-node dist/index.js /path/to/database --transport http --port 8080 --endpoint /kuzu
-# Server will be available at http://localhost:8080/kuzu
-```
-
-### Multi-Agent Coordination (Experimental)
-
-The server supports multi-agent coordination to allow multiple AI agents (e.g., Claude Desktop and Claude Code) to share the same Kuzu database safely. This feature addresses Kuzu's single-writer limitation through transparent file-based locking.
-
-#### Enabling Multi-Agent Mode
-
-Set the following environment variables in your configuration:
-
-- `KUZU_MULTI_AGENT=true` - Enable multi-agent coordination
-- `KUZU_AGENT_ID=string` - Unique identifier for the agent (e.g., "claude-desktop", "claude-code")
-- `KUZU_LOCK_TIMEOUT=number` - Lock timeout in milliseconds (default: 10000)
-
-#### Claude Desktop Configuration
+### Configuration
 ```json
 {
-    "mcpServers": {
-        "kuzu": {
-            "command": "npx",
-            "args": ["kuzudb-mcp-server", "/path/to/database"],
-            "env": {
-                "KUZU_MULTI_AGENT": "true",
-                "KUZU_AGENT_ID": "claude-desktop"
-            }
-        }
+  "mcpServers": {
+    "kuzu": {
+      "command": "npx",
+      "args": ["kuzudb-mcp-server", "/path/to/database"],
+      "env": {
+        "KUZU_MULTI_AGENT": "true",
+        "KUZU_AGENT_ID": "claude-desktop",
+        "KUZU_LOCK_TIMEOUT": "10000"
+      }
     }
+  }
 }
 ```
 
-#### Claude Code Configuration
-```json
-{
-    "mcpServers": {
-        "kuzu": {
-            "command": "npx",
-            "args": ["kuzudb-mcp-server", "/path/to/database"],
-            "env": {
-                "KUZU_MULTI_AGENT": "true",
-                "KUZU_AGENT_ID": "claude-code"
-            }
-        }
-    }
-}
-```
+### How It Works
+- **Read queries**: Execute immediately without coordination
+- **Write queries**: Acquire exclusive file-based locks
+- **Auto cleanup**: Stale locks detected and removed
+- **Clear errors**: Lock conflicts return helpful retry messages
 
-#### How It Works
+### Important Notes
+- Experimental feature for local development
+- Both agents must use the same database path
+- Lock files created in database directory
+- 10-second default timeout covers most operations
 
-When multi-agent mode is enabled:
-- Read queries execute immediately without coordination
-- Write queries (CREATE, MERGE, SET, DELETE, etc.) acquire an exclusive lock
-- Locks are automatically released after query completion
-- Stale locks from crashed processes are detected and cleaned up
-- Lock conflicts result in clear error messages with retry suggestions
+## 🛠️ Development
 
-#### Important Notes
-
-- This feature is experimental and designed for local development scenarios
-- Both agents must point to the same database path
-- The lock file (`.mcp_write_lock`) is created in the database directory
-- Lock timeout defaults to 10 seconds, which covers most operations
-
-## Development
-
-To build from source:
-
+### Build and Test
 ```bash
-# Clone the repository
-git clone https://github.com/jordanburke/kuzudb-mcp-server.git
-cd kuzudb-mcp-server
-
 # Install dependencies
 pnpm install
 
-# Build the project
-pnpm run build
+# Build project
+pnpm build
 
-# Run development mode with watch
-pnpm run dev
+# Development with watch
+pnpm dev
 
-# Run tests and linting
-pnpm run lint
-pnpm run typecheck
-pnpm run format:check
+# Run tests
+pnpm test
+pnpm test:ui
+pnpm test:coverage
+
+# Linting and formatting
+pnpm lint
+pnpm typecheck
+pnpm format:check
 ```
 
-For local development, you can also configure Claude Desktop to use the local build:
-
+### Local Claude Desktop Setup
 ```json
 {
-    "mcpServers": {
-        "kuzu": {
-            "command": "node",
-            "args": [
-                "/path/to/kuzudb-mcp-server/dist/index.js",
-                "/path/to/kuzu/database"
-            ]
-        }
+  "mcpServers": {
+    "kuzu": {
+      "command": "node",
+      "args": [
+        "/path/to/kuzudb-mcp-server/dist/index.js",
+        "/path/to/database"
+      ]
     }
+  }
 }
 ```
 
-## Web UI for Database Management
+## 🔧 Environment Variables Reference
 
-The server includes a web-based interface for managing your Kuzu database, automatically enabled when running in HTTP transport mode.
+| Variable | Description | Default | Usage |
+|----------|-------------|---------|-------|
+| **Database** |
+| `KUZU_MCP_DATABASE_PATH` | Database path if not in args | - | Startup |
+| `KUZU_READ_ONLY` | Enable read-only mode | `false` | Security |
+| **Connection** |
+| `KUZU_MAX_RETRIES` | Connection recovery attempts | `2` | Reliability |
+| **Multi-Agent** |
+| `KUZU_MULTI_AGENT` | Enable coordination | `false` | Concurrency |
+| `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` | Locking |
+| `KUZU_LOCK_TIMEOUT` | Lock timeout (ms) | `10000` | Performance |
+| **Web UI** |
+| `KUZU_WEB_UI_ENABLED` | Enable/disable Web UI | `true` | Interface |
+| `KUZU_WEB_UI_PORT` | Web UI port | `3001` | Network |
+| `KUZU_WEB_UI_AUTH_USER` | Web UI username | - | Security |
+| `KUZU_WEB_UI_AUTH_PASSWORD` | Web UI password | - | Security |
+| **Authentication** |
+| `KUZU_OAUTH_ENABLED` | Enable OAuth | `false` | Security |
+| `KUZU_OAUTH_USERNAME` | OAuth username | - | Auth |
+| `KUZU_OAUTH_PASSWORD` | OAuth password | - | Auth |
+| `KUZU_BASIC_AUTH_USERNAME` | Basic Auth username | - | Auth |
+| `KUZU_BASIC_AUTH_PASSWORD` | Basic Auth password | - | Auth |
 
-### Features
+## 🔍 Troubleshooting
 
-- **Database Backup & Restore**: Download and upload database backups through your browser
-- **Direct Database Upload**: Upload existing Kuzu database files (main + .wal files) directly
-- **Visual Database Info**: View database path, mode, and connection status
-- **Secure Access**: Optional authentication to protect your database
-- **Read-Only Mode Support**: Upload/restore features automatically disabled in read-only mode
+### Connection Issues
+- **"Database connection could not be restored"** → Check database file exists and permissions
+- **"getAll timeout"** → DDL operation hung, server will auto-recover
+- **Lock timeout** → Another agent writing, wait and retry
 
-### Using the Web UI
+### Web UI Issues  
+- **404 on /admin** → Ensure HTTP transport mode is enabled
+- **Authentication failing** → Check `KUZU_WEB_UI_AUTH_*` variables
+- **Port conflicts** → Change `KUZU_WEB_UI_PORT` or `PORT`
 
-The Web UI is **automatically enabled** when running with HTTP transport.
+### Docker Issues
+- **Health check failing** → Verify database mount and port availability
+- **Permission errors** → Check volume mount permissions
+- **Database not found** → Ensure correct path mapping
 
-#### Quick Start
+### Performance Notes
+Based on testing:
+- **Simple queries**: < 100ms response time
+- **Complex multi-hop**: 200-500ms response time  
+- **Schema retrieval**: ~100-200ms response time
+- **AI query generation**: 1-3 seconds (normal for LLM processing)
 
-```bash
-# Web UI auto-starts on port 3001
-pnpm serve:test:http
-
-# Access the web UI
-open http://localhost:3001/admin
-```
-
-#### With Docker Compose
-
-```bash
-# Start with web UI on port 3001
-docker-compose up -d
-
-# Access the web UI
-open http://localhost:3001/admin
-```
-
-#### Disabling the Web UI
-
-To disable the web UI (e.g., for production security):
-
-```bash
-# Explicitly disable web UI
-KUZU_WEB_UI_ENABLED=false \
-node dist/index.js test/test-db --transport http
-```
-
-#### With Authentication
-
-```bash
-# Add authentication for security
-KUZU_WEB_UI_AUTH_USER=admin \
-KUZU_WEB_UI_AUTH_PASSWORD=changeme \
-node dist/index.js test/test-db --transport http
-```
-
-#### With Docker
-
-```bash
-docker run -d \
-  -p 3000:3000 \
-  -p 3001:3001 \
-  -v /path/to/database:/database \
-  -e KUZU_WEB_UI_ENABLED=true \
-  -e KUZU_WEB_UI_PORT=3001 \
-  -e KUZU_WEB_UI_AUTH_USER=admin \
-  -e KUZU_WEB_UI_AUTH_PASSWORD=changeme \
-  ghcr.io/jordanburke/kuzudb-mcp-server:latest
-```
-
-### Web UI Endpoints
-
-- `/admin` - Main web interface
-- `/health` - Health check endpoint
-- `/api/info` - Database information (JSON)
-- `/api/backup` - Download database backup
-- `/api/restore` - Upload and restore database (supports both backups and raw files)
-
-### Uploading Existing Databases
-
-The Web UI supports two methods for uploading databases:
-
-#### Method 1: Upload Backup File
-Upload a `.kuzu` backup file created by the download feature.
-
-#### Method 2: Upload Raw Database Files
-Upload your existing Kuzu database files directly:
-1. Click "Upload" in the web interface
-2. Select **both** files:
-   - Your main database file (e.g., `memory`, `mydb.db`, etc.)
-   - The WAL file if it exists (e.g., `memory.wal`)
-3. The server will restore these files directly
-
-Example: For a database at `C:\Users\you\OneDrive\Apps\kuzudb\memory`:
-- Upload: `memory` (main file) + `memory.wal` (WAL file)
-- The server replaces its current database with your files
-
-### Security Notes
-
-- Web UI is **automatically enabled** with HTTP transport (disable with `KUZU_WEB_UI_ENABLED=false`)
-- Only available when running with HTTP transport (not with stdio)
-- Authentication is strongly recommended for production use
-- CORS headers allow cross-origin requests (configure as needed)
-
-## Documentation
+## 📚 Documentation
 
 ### Core Features
-- **[Connection Recovery](./docs/connection-recovery.md)** - Automatic connection recovery, retry logic, and error handling
-- **[Multi-Agent Coordination](./docs/Multi-Agent%20Coordination%20Design%20for%20kuzudb-mcp-server.md)** - Safe concurrent access with file-based locking
-- **[Batch Query Improvements](./docs/batch-query-improvements.md)** - Enhanced DDL and multi-statement query handling
+- **[Connection Recovery](./docs/connection-recovery.md)** - Automatic recovery and retry logic
+- **[Multi-Agent Coordination](./docs/Multi-Agent%20Coordination%20Design%20for%20kuzudb-mcp-server.md)** - Concurrent access design
+- **[Batch Query Improvements](./docs/batch-query-improvements.md)** - DDL and multi-statement handling
 
 ### Bug Workarounds
-- **[Kuzu Bug Workarounds](./kuzu-bug-report/KUZU_BUG_WORKAROUNDS.md)** - Temporary fixes for known Kuzu issues
+- **[Kuzu Bug Workarounds](./kuzu-bug-report/KUZU_BUG_WORKAROUNDS.md)** - Known issue fixes
 
-### Environment Variables
+---
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `KUZU_READ_ONLY` | Enable read-only mode | `false` |
-| `KUZU_MAX_RETRIES` | Connection recovery retry attempts | `2` |
-| `KUZU_MULTI_AGENT` | Enable multi-agent coordination | `false` |
-| `KUZU_AGENT_ID` | Unique agent identifier | `unknown-{pid}` |
-| `KUZU_LOCK_TIMEOUT` | Lock acquisition timeout (ms) | `10000` |
-| `KUZU_MCP_DATABASE_PATH` | Database path if not provided as argument | - |
-| `KUZU_WEB_UI_ENABLED` | Enable/disable web UI (HTTP mode only) | `true` (auto-enabled with HTTP) |
-| `KUZU_WEB_UI_PORT` | Port for web UI server | `3001` |
-| `KUZU_WEB_UI_AUTH_USER` | Username for web UI authentication | - |
-| `KUZU_WEB_UI_AUTH_PASSWORD` | Password for web UI authentication | - |
+**Repository**: [github.com/jordanburke/kuzudb-mcp-server](https://github.com/jordanburke/kuzudb-mcp-server)  
+**Docker Images**: [ghcr.io/jordanburke/kuzudb-mcp-server](https://github.com/jordanburke/kuzudb-mcp-server/pkgs/container/kuzudb-mcp-server)  
+**Package**: [npmjs.com/package/kuzudb-mcp-server](https://www.npmjs.com/package/kuzudb-mcp-server)
