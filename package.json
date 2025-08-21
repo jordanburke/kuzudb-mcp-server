@@ -9,7 +9,7 @@
     "kuzudb-mcp-server": "./dist/index.js"
   },
   "scripts": {
-    "ci": "pnpm format && pnpm lint:check && pnpm typecheck && pnpm test && pnpm build",
+    "validate": "pnpm format && pnpm lint:check && pnpm typecheck && pnpm test && pnpm build",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "lint": "eslint . --fix",
@@ -33,7 +33,7 @@
     "serve:dev": "tsup --watch --onSuccess \"node dist/index.js\"",
     "db:init": "pnpm build && node dist/index.js --init test/test-db",
     "db:init:movies": "pnpm build && node dist/index.js --init test/test-db --template movies",
-    "prepublishOnly": "pnpm ci",
+    "prepublishOnly": "pnpm validate",
     "clean:test-dbs": "node scripts/clean-test-dbs.js",
     "kill": "node scripts/kill-servers.js",
     "stop": "node scripts/kill-servers.js",

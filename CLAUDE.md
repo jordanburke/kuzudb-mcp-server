@@ -10,7 +10,7 @@ kuzudb-mcp-server is a Model Context Protocol (MCP) server that enables AI agent
 
 ### Pre-Checkin Command
 ```bash
-pnpm ci                      # 🚀 Main command: format, lint, typecheck, test, and build
+pnpm validate               # 🚀 Main command: format, lint, typecheck, test, and build
 ```
 
 ### Individual Commands
