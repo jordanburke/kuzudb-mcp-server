@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// Polyfill for Web Crypto API in Node.js environments
+import { webcrypto } from "crypto"
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto
+}
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {

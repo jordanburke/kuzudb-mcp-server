@@ -1,4 +1,10 @@
 /* eslint-disable @typescript-eslint/only-throw-error */
+// Polyfill for Web Crypto API in Node.js environments
+import { webcrypto } from "crypto"
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto
+}
+
 import { FastMCP } from "@jordanburke/fastmcp"
 import { z } from "zod"
 import * as kuzu from "kuzu"
