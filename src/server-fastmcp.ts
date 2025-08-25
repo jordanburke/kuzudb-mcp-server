@@ -604,7 +604,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             email: tokenData.email,
           })
 
-          const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+          const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET)
 
           res.json({
             access_token: accessToken,
@@ -691,7 +691,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
           email: options.oauth?.email,
         })
 
-        const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+        const accessToken = jwt.sign(accessTokenPayload, JWT_SECRET)
 
         res.json({
           access_token: accessToken,
