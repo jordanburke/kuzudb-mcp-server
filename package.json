@@ -39,6 +39,7 @@
     "stop": "node scripts/kill-servers.js",
     "restart": "node scripts/kill-servers.js && pnpm serve:test:http",
     "test:e2e": "playwright test",
+
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:oauth": "playwright test oauth.spec.ts",
     "test:e2e:jwt": "playwright test oauth-jwt.spec.ts"

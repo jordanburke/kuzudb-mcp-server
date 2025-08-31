@@ -29,7 +29,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'KUZU_OAUTH_ENABLED=true KUZU_OAUTH_TOKEN=test-token-123 pnpm serve:test:http',
+    command: 'KUZU_OAUTH_ENABLED=true KUZU_OAUTH_USERNAME=admin KUZU_OAUTH_PASSWORD=secret123 KUZU_OAUTH_USER_ID=oauth-admin KUZU_OAUTH_EMAIL=admin@example.com KUZU_OAUTH_ISSUER=http://localhost:3000 KUZU_OAUTH_RESOURCE=http://localhost:3000/mcp pnpm serve:test:http',
     url: 'http://localhost:3000/health',
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
