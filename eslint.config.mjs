@@ -13,7 +13,7 @@ export default [
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
       },
       globals: {
         console: 'readonly',
@@ -25,6 +25,7 @@ export default [
         Response: 'readonly', // Node.js 18+ Web API
         fetch: 'readonly', // Node.js 18+ Web API
         URL: 'readonly', // Node.js 18+ Web API
+        URLSearchParams: 'readonly', // Node.js 18+ Web API
       },
     },
     plugins: {
@@ -52,7 +53,7 @@ export default [
     },
   },
   {
-    files: ['**/__tests__/**/*.ts', '**/*.test.ts'],
+    files: ['**/__tests__/**/*.ts', '**/*.test.ts', 'tests/**/*.spec.ts'],
     rules: {
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
@@ -62,6 +63,11 @@ export default [
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/only-throw-error': 'off', // Allow Response objects in tests
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any in tests
+      '@typescript-eslint/no-unsafe-return': 'off', // Allow unsafe returns in tests
+      '@typescript-eslint/no-unsafe-argument': 'off', // Allow unsafe arguments in tests
+      '@typescript-eslint/await-thenable': 'off', // Allow await on non-promises in tests
+      '@typescript-eslint/restrict-template-expressions': 'off', // Allow template expressions in tests
     },
   },
   {
