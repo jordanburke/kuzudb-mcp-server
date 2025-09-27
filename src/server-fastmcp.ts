@@ -590,7 +590,7 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
             email: tokenData.email || "",
             scope: "read write",
             iat: Math.floor(Date.now() / 1000),
-            exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
+            exp: Math.floor(Date.now() / 1000) + JWT_EXPIRES_IN,
             iss: options.oauth?.issuer || `http://localhost:${options.port || 3000}`,
             aud:
               options.oauth?.resource || `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
@@ -672,13 +672,13 @@ export function createFastMCPServer(options: FastMCPServerOptions): {
         // Remove used code
         authorizationCodes.delete(code!)
 
-        // Generate JWT access token (15 minutes)
+        // Generate JWT access token
         const accessTokenPayload = {
           sub: codeData.userId,
           email: options.oauth?.email || "",
           scope: "read write",
           iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
+          exp: Math.floor(Date.now() / 1000) + JWT_EXPIRES_IN,
           iss: options.oauth?.issuer || `http://localhost:${options.port || 3000}`,
           aud: options.oauth?.resource || `${options.oauth?.issuer || `http://localhost:${options.port || 3000}`}/mcp`,
         }
