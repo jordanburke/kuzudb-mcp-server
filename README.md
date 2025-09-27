@@ -1,5 +1,7 @@
 # kuzudb-mcp-server
 
+[![smithery badge](https://smithery.ai/badge/@jordanburke/kuzudb-mcp-server)](https://smithery.ai/server/@jordanburke/kuzudb-mcp-server)
+
 A Model Context Protocol server that provides access to Kuzu graph databases. This server enables LLMs to inspect database schemas and execute queries with robust connection recovery, multi-agent coordination, and a built-in web interface.
 
 ## 🚀 Key Features
@@ -170,6 +172,14 @@ KUZU_JWT_EXPIRES_IN=2592000 # 30 days
 - **Configure JWT expiration** based on your security requirements
 
 ## Usage with Claude Desktop
+
+### Installing via Smithery
+
+To install kuzudb-mcp-server automatically via [Smithery](https://smithery.ai/server/@jordanburke/kuzudb-mcp-server):
+
+```bash
+npx -y @smithery/cli install @jordanburke/kuzudb-mcp-server
+```
 
 ### Docker (Recommended)
 ```json

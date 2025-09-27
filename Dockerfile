@@ -1,43 +1,39 @@
-FROM node:22
+FROM node:22-alpine
 
 # Install pnpm
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
-# Copy app files
-RUN mkdir -p /home/node/app
-WORKDIR /home/node/app
+# Create app directory
+WORKDIR /app
 
-# Copy package files first for better caching
-COPY ./package.json ./pnpm-lock.yaml ./
-COPY ./tsconfig.json ./tsup.config.ts ./
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+COPY tsconfig.json tsup.config.ts ./
 
 # Copy source files
-COPY ./src ./src
-
-# Set ownership
-RUN chown -R node:node /home/node/app
-
-# Make database directory and set permissions
-RUN mkdir -p /database
-RUN chown -R node:node /database
-
-# Switch to node user
-USER node
+COPY src ./src
 
 # Install dependencies and build
 RUN pnpm install --frozen-lockfile --prod=false && \
-    cd node_modules/.pnpm/kuzu@0.11.2/node_modules/kuzu && node install.js && cd /home/node/app && \
     pnpm run build && \
+    pnpm prune --prod && \
     rm -rf src tsconfig.json tsup.config.ts
 
-# Set environment variables
+# Create database directory
+RUN mkdir -p /app/database
+
+# Environment variables for auto-init
 ENV NODE_ENV=production
-ENV KUZU_MCP_DATABASE_PATH=/database
+ENV KUZU_MCP_DATABASE_PATH=/app/database
+ENV KUZU_AUTO_INIT=true
+ENV KUZU_INIT_TEMPLATE=movies
+ENV PORT=3000
 
-# Expose HTTP ports (MCP server and Web UI)
-EXPOSE 3000 3001
+# Expose HTTP port for Smithery
+EXPOSE $PORT
 
-# Run app in HTTP mode by default
-ENTRYPOINT ["sh", "-c", "node dist/index.js --transport http --port ${PORT:-3000}"]
+# Smithery requires HTTP transport with Streamable protocol
+# The auto-initialization is handled in the main code now
+CMD ["node", "dist/index.js", "--transport", "http", "--port", "3000"]
