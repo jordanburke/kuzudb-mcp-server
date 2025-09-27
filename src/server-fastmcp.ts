@@ -67,8 +67,10 @@ export interface FastMCPServerOptions {
 // JWT secret for token signing/validation
 const JWT_SECRET = process.env.KUZU_JWT_SECRET || randomBytes(32).toString("hex")
 
-// JWT token expiration configuration (default: 24 hours)
-const JWT_EXPIRES_IN = process.env.KUZU_JWT_EXPIRES_IN ? parseInt(process.env.KUZU_JWT_EXPIRES_IN, 10) : 24 * 60 * 60 // 24 hours in seconds
+// JWT token expiration configuration (default: 1 year)
+const JWT_EXPIRES_IN = process.env.KUZU_JWT_EXPIRES_IN
+  ? parseInt(process.env.KUZU_JWT_EXPIRES_IN, 10)
+  : 365 * 24 * 60 * 60 // 1 year in seconds
 
 // In-memory stores for OAuth flow
 const authorizationCodes = new Map<

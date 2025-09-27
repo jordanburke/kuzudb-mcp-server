@@ -216,7 +216,7 @@ When `KUZU_MULTI_AGENT=true`, lock files are created in the database directory:
 | `KUZU_OAUTH_ENABLED` | Enable OAuth authentication | `false` | HTTP transport auth |
 | `KUZU_BASIC_AUTH_USERNAME` | Basic auth username | - | HTTP transport auth |
 | `KUZU_BASIC_AUTH_PASSWORD` | Basic auth password | - | HTTP transport auth |
-| `KUZU_JWT_EXPIRES_IN` | JWT token expiration time (seconds) | `86400` (24 hours) | Authentication duration |
+| `KUZU_JWT_EXPIRES_IN` | JWT token expiration time (seconds) | `31536000` (1 year) | Authentication duration |
 
 ## Common Issues and Solutions
 

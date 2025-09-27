@@ -121,7 +121,7 @@ KUZU_OAUTH_USERNAME=admin \
 KUZU_OAUTH_PASSWORD=your-secure-password \
 KUZU_OAUTH_USER_ID=admin-user \
 KUZU_OAUTH_EMAIL=admin@example.com \
-KUZU_JWT_EXPIRES_IN=3600 \
+KUZU_JWT_EXPIRES_IN=31536000 \
 node dist/index.js /path/to/database --transport http
 ```
 
@@ -155,10 +155,10 @@ node dist/index.js /path/to/database --transport http
 Configure JWT token lifetime (OAuth mode only):
 
 ```bash
-# Set token expiration in seconds (default: 86400 = 24 hours)
-KUZU_JWT_EXPIRES_IN=3600  # 1 hour
-KUZU_JWT_EXPIRES_IN=7200  # 2 hours
-KUZU_JWT_EXPIRES_IN=86400 # 24 hours (default)
+# Set token expiration in seconds (default: 31536000 = 1 year)
+KUZU_JWT_EXPIRES_IN=3600    # 1 hour
+KUZU_JWT_EXPIRES_IN=86400   # 24 hours
+KUZU_JWT_EXPIRES_IN=2592000 # 30 days
 ```
 
 ### Security Recommendations
