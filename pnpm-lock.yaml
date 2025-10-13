@@ -13,7 +13,7 @@ importers:
         version: 3.15.200
       '@modelcontextprotocol/sdk':
         specifier: ^1.18.2
-        version: 1.18.2
+        version: 1.20.0
       '@types/express':
         specifier: ^5.0.3
         version: 5.0.3
@@ -30,14 +30,14 @@ importers:
         specifier: ^9.0.2
         version: 9.0.2
       kuzu:
-        specifier: 0.11.2
-        version: 0.11.2
+        specifier: 0.11.3
+        version: 0.11.3
       multer:
         specifier: ^2.0.2
         version: 2.0.2
       zod:
         specifier: ^4.1.11
-        version: 4.1.11
+        version: 4.1.12
     devDependencies:
       '@eslint/js':
         specifier: ^9.36.0
@@ -356,8 +356,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@modelcontextprotocol/sdk@1.18.2':
-    resolution: {integrity: sha512-beedclIvFcCnPrYgHsylqiYJVJ/CI47Vyc4tY8no1/Li/O8U4BTlJfy6ZwxkYwx+Mx10nrgwSVrA7VBbhh4slg==}
+  '@modelcontextprotocol/sdk@1.20.0':
+    resolution: {integrity: sha512-kOQ4+fHuT4KbR2iq2IjeV32HiihueuOf1vJkq18z08CLZ1UQrTc8BXJpVfxZkq45+inLLD+D4xx4nBjUelJa4Q==}
     engines: {node: '>=18'}
 
   '@nodelib/fs.scandir@2.1.5':
@@ -1410,8 +1410,9 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  kuzu@0.11.2:
-    resolution: {integrity: sha512-4DrhdfjxImGqtfuQBhPuptQBQ6OT8G/n/cdpj7etgNJ7XeT6SeMGdo4duMvsSATRommzhTxeLwm7FHUIiYTjhg==}
+  kuzu@0.11.3:
+    resolution: {integrity: sha512-4+hD3Y+YMV3e0uiqTv1/GUal47D04l8qluw1WFWg8Nx3k7rLsHG1Pmq9WHIOlf1742svxQvTYQiuY6oS1qxAZA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -1589,8 +1590,8 @@ packages:
   node-addon-api@6.1.0:
     resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
 
-  node-api-headers@1.5.0:
-    resolution: {integrity: sha512-Yi/FgnN8IU/Cd6KeLxyHkylBUvDTsSScT0Tna2zTrz8klmc8qF2ppj6Q1LHsmOueJWhigQwR4cO2p0XBGW5IaQ==}
+  node-api-headers@1.6.0:
+    resolution: {integrity: sha512-81T99+mWLZnxX0LlZPYuafyFlxVVaWKQ0BDAbSrOqLO+v+gzCzu0GTAVNeVK8lucqjqo9L/1UcK9cpkem8Py4Q==}
 
   npm-run-path@6.0.0:
     resolution: {integrity: sha512-9qny7Z9DsQU8Ou39ERsPU4OZQlSTP47ShQzuKZ6PRXpYLtIFgl/DEBYEXKlvcEa+9tHVcK8CF81Y2V72qaZhWA==}
@@ -1817,6 +1818,11 @@ packages:
 
   semver@7.7.2:
     resolution: {integrity: sha512-RF0Fw+rO5AMf9MAyaRXI4AV0Ulj5lMHqVxxdSgiVbixSCXoEmmX/jk0CuJw4+3SqroYO9VoUh+HcuJivvtJemA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  semver@7.7.3:
+    resolution: {integrity: sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -2299,8 +2305,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.1.11:
-    resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
 snapshots:
 
@@ -2472,7 +2478,7 @@ snapshots:
 
   '@jordanburke/fastmcp@3.15.200':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.18.2
+      '@modelcontextprotocol/sdk': 1.20.0
       '@standard-schema/spec': 1.0.0
       execa: 9.6.0
       file-type: 21.0.0
@@ -2506,7 +2512,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/sdk@1.18.2':
+  '@modelcontextprotocol/sdk@1.20.0':
     dependencies:
       ajv: 6.12.6
       content-type: 1.0.5
@@ -3031,10 +3037,10 @@ snapshots:
       debug: 4.4.3
       fs-extra: 11.3.2
       memory-stream: 1.0.0
-      node-api-headers: 1.5.0
+      node-api-headers: 1.6.0
       npmlog: 6.0.2
       rc: 1.2.8
-      semver: 7.7.2
+      semver: 7.7.3
       tar: 6.2.1
       url-join: 4.0.1
       which: 2.0.2
@@ -3666,7 +3672,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  kuzu@0.11.2:
+  kuzu@0.11.3:
     dependencies:
       cmake-js: 7.3.1
       node-addon-api: 6.1.0
@@ -3722,7 +3728,7 @@ snapshots:
 
   make-dir@4.0.0:
     dependencies:
-      semver: 7.7.2
+      semver: 7.7.3
 
   math-intrinsics@1.1.0: {}
 
@@ -3821,7 +3827,7 @@ snapshots:
 
   node-addon-api@6.1.0: {}
 
-  node-api-headers@1.5.0: {}
+  node-api-headers@1.6.0: {}
 
   npm-run-path@6.0.0:
     dependencies:
@@ -4037,6 +4043,8 @@ snapshots:
   safer-buffer@2.1.2: {}
 
   semver@7.7.2: {}
+
+  semver@7.7.3: {}
 
   send@1.2.0:
     dependencies:
@@ -4506,4 +4514,4 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.1.11: {}
+  zod@4.1.12: {}
