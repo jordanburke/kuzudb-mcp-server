@@ -41,7 +41,7 @@ importers:
     devDependencies:
       '@eslint/js':
         specifier: ^9.36.0
-        version: 9.36.0
+        version: 9.38.0
       '@playwright/test':
         specifier: ^1.55.1
         version: 1.55.1
@@ -305,6 +305,10 @@ packages:
 
   '@eslint/js@9.36.0':
     resolution: {integrity: sha512-uhCbYtYynH30iZErszX78U+nR3pJU3RHGQ57NXy5QupD4SBVwDeU8TNBy+MjMngc1UyIW9noKqsRqfjQTBU2dw==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@eslint/js@9.38.0':
+    resolution: {integrity: sha512-UZ1VpFvXf9J06YG9xQBdnzU+kthors6KjhMAl6f4gH4usHyh31rUf2DLGInT8RFYIReYXNSydgPY0V2LuWgl7A==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@eslint/object-schema@2.1.6':
@@ -1412,6 +1416,7 @@ packages:
 
   kuzu@0.11.2:
     resolution: {integrity: sha512-4DrhdfjxImGqtfuQBhPuptQBQ6OT8G/n/cdpj7etgNJ7XeT6SeMGdo4duMvsSATRommzhTxeLwm7FHUIiYTjhg==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -2440,6 +2445,8 @@ snapshots:
       - supports-color
 
   '@eslint/js@9.36.0': {}
+
+  '@eslint/js@9.38.0': {}
 
   '@eslint/object-schema@2.1.6': {}
 
