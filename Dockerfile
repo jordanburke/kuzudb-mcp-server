@@ -28,7 +28,7 @@ USER node
 
 # Install dependencies and build
 RUN pnpm install --frozen-lockfile --prod=false && \
-    cd node_modules/.pnpm/kuzu@0.11.2/node_modules/kuzu && node install.js && cd /home/node/app && \
+    cd node_modules/.pnpm/kuzu@0.11.3/node_modules/kuzu && node install.js && cd /home/node/app && \
     pnpm run build && \
     rm -rf src tsconfig.json tsup.config.ts
 

@@ -17,7 +17,7 @@ sudo apt-get install libnspr4 libnss3 libasound2t64
 
 3. **Build Kuzu native module** (required for pnpm):
 ```bash
-cd node_modules/.pnpm/kuzu@0.11.2/node_modules/kuzu && node install.js
+cd node_modules/.pnpm/kuzu@0.11.3/node_modules/kuzu && node install.js
 cd - # return to project root
 ```
 
@@ -164,7 +164,7 @@ When running `oauth-working.spec.ts`, you should see:
 
 ### "Cannot find module kuzu"
 ```bash
-cd node_modules/.pnpm/kuzu@0.11.2/node_modules/kuzu && node install.js
+cd node_modules/.pnpm/kuzu@0.11.3/node_modules/kuzu && node install.js
 ```
 
 ### "No tests found"
