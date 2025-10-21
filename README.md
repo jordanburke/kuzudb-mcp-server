@@ -1,6 +1,16 @@
 # kuzudb-mcp-server
 
+> **⚠️ ARCHIVED**: This project is archived as the Kuzu database repository was archived on October 10, 2025. See [ARCHIVE_NOTICE.md](./ARCHIVE_NOTICE.md) for details and alternatives.
+
+---
+
 A Model Context Protocol server that provides access to Kuzu graph databases. This server enables LLMs to inspect database schemas and execute queries with robust connection recovery, multi-agent coordination, and a built-in web interface.
+
+## Archive Status
+
+**Archived** - October 21, 2025
+
+The Kuzu graph database repository was archived by its maintainers on October 10, 2025 and is now read-only. As Kuzu is no longer actively maintained, this MCP server is also being archived. The project remains fully functional with Kuzu v1.4.1-r.4. See [ARCHIVE_NOTICE.md](./ARCHIVE_NOTICE.md) for full details, technical achievements, and alternative graph database options.
 
 ## 🚀 Key Features
 
